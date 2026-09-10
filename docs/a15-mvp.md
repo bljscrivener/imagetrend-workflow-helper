@@ -163,3 +163,9 @@ Syntax check, seven timeline tests and twelve procedure regression scenarios pas
 Stretcher movement uses Depart Scene minus 2 minutes when a complete departure timestamp is available. If departure date/time is missing or blank, use Arrived on Scene (29335Date/Time) plus 2 minutes. This is scene arrival, not patient arrival. Invalid populated timestamps or ambiguous fields still block. If patient arrival is available, the computed time must not precede it. Read timeline captures the additional scene-arrival fields; both new bundle entries and reviewed existing-entry repairs use this rule. Missing both source timestamps blocks; dates roll across midnight correctly.
 
 Validation: syntax, twelve timeline scenarios and twelve procedure scenarios passed. Live validation pending.
+
+## v0.1.8 automatic Procedure Add
+
+After Read timeline, return to Treatment → Procedures & Medications and click Add four procedures in the helper. It locates the captured Procedures grid aa6d315f-ccbc-58c0-950e-2e0932ee67b6, validates its heading, empty item container, enabled filters, and exact native Add binding, then opens the blank flyout automatically. The existing four-entry sequence proceeds. Preflight timeline and repeat-attempt checks run before Add. Existing blank-flyout starts remain supported.
+
+Automatic grid starts refuse populated lists, inactive filters, disabled Add, and mismatched headings. This is empty-list protection, not full duplicate reconciliation; partially populated lists still require manual review. Timeline navigation is still manual because its navigation markup was not provided. Five grid tests and twelve procedure tests passed; live v0.1.8 validation pending. Raw supplied chart markup is not committed.
