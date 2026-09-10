@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ImageTrend Preset Lab (experimental)
 // @namespace    local.imagetrend.presetlab
-// @version      0.2.0
+// @version      0.2.1
 // @description  Isolated, reviewed native preset field experiment. Two reviewed preset fields from any chart section.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        none
@@ -19,7 +19,7 @@
   const host=document.createElement('div');host.id='it-preset-lab';
   host.style.cssText='position:fixed;left:315px;bottom:65px;z-index:2147483646';
   const ui=host.attachShadow({mode:'open'});
-  ui.innerHTML='<style>:host{font:14px system-ui;color:#253144}section{background:white;border:2px solid #864ca3;border-radius:12px;padding:16px;width:380px;max-width:85vw;max-height:70vh;overflow:auto;box-shadow:0 8px 24px #0004}button,select{font:inherit;padding:8px;margin:5px 0}select{width:100%}pre{white-space:pre-wrap;font:12px system-ui;background:#f4edf8;padding:9px}label{display:block;margin:10px 0}h3{margin:0}small{display:block;margin:8px 0}button{cursor:pointer}#apply{background:#864ca3;color:white;border:0;border-radius:5px}button:disabled{opacity:.45}[hidden]{display:none!important}</style><button id="launch">Preset Lab</button><section hidden><h3>Preset Lab · experimental 0.2.0</h3><small>Use on your TEST chart. Native field updates may persist immediately. This does not call the preset audit or chart Save.</small><select id="choice"></select><button id="preview">Preview selected values</button><pre id="result">Preview either test field from any chart section. Both test fields are selected by default; no navigation needed.</pre><label><input id="ack" type="checkbox">This is a TEST chart and this displayed value is appropriate.</label><button id="apply" disabled>Apply selected values</button> <button id="hide">Minimize</button></section>';
+  ui.innerHTML='<style>:host{font:14px system-ui;color:#253144}section{background:white;border:2px solid #864ca3;border-radius:12px;padding:16px;width:380px;max-width:85vw;max-height:70vh;overflow:auto;box-shadow:0 8px 24px #0004}button,select{font:inherit;padding:8px;margin:5px 0}select{width:100%}pre{white-space:pre-wrap;font:12px system-ui;background:#f4edf8;padding:9px}label{display:block;margin:10px 0}h3{margin:0}small{display:block;margin:8px 0}button{cursor:pointer}#apply{background:#864ca3;color:white;border:0;border-radius:5px}button:disabled{opacity:.45}[hidden]{display:none!important}</style><button id="launch">Preset Lab</button><section hidden><h3>Preset Lab · experimental 0.2.1</h3><small>Use on your TEST chart. Native field updates may persist immediately. This does not call the preset audit or chart Save.</small><select id="choice"></select><button id="preview">Preview selected values</button><pre id="result">Preview either test field from any chart section. Both test fields are selected by default; no navigation needed.</pre><label><input id="ack" type="checkbox">This is a TEST chart and this displayed value is appropriate.</label><button id="apply" disabled>Apply selected values</button> <button id="hide">Minimize</button></section>';
   document.body.append(host);
   const $=s=>ui.querySelector(s);let reviewed=null,busy=false;
   for(const [i,c] of choices.entries()){const o=document.createElement('option');o.value=i;o.textContent=c.label;$('#choice').append(o);}
@@ -36,7 +36,13 @@
     if(form.closest('.locked'))throw Error('Chart is locked.');
     const contexts=[...new Set([form,...form.querySelectorAll('[data-bind]')].map(n=>ko.contextFor(n)).filter(Boolean))];
     if(!contexts.length)throw Error('Chart context unavailable.');
-    if(contexts.some(ctx=>app.FormComposer.isReadOnly(ctx)))throw Error('Chart contains a read-only context.');
+    // isReadOnly expects a field context, not every nested template on the page.
+    const owners=[...new Set([app.currentVm,...contexts.flatMap(ctx=>[ctx.$root,ctx.$data,...(ctx.$parents||[])])])].filter(Boolean);
+    const statuses=owners.filter(o=>'currentIncidentReadOnlyStatus' in Object(o)).map(o=>ko.unwrap(o.currentIncidentReadOnlyStatus));
+    if(!statuses.length||statuses.some(x=>x==null))throw Error('Chart editability could not be verified. No changes made.');
+    if(statuses.some(Boolean)||document.querySelector('#center-pane.locked, #left-pane.locked'))throw Error('Chart is locked.');
+    const targetContexts=contexts.filter(ctx=>ko.unwrap(ctx.$data?.BindingPathEntryID)===c.id);
+    if(targetContexts.some(ctx=>app.FormComposer.isReadOnly(ctx)))throw Error('Target field is read-only.');
     const defs=(app.formComposer.agencyPresetValues||[]).flatMap(d=>d.PresetValues||[]).filter(d=>d.BindingPathEntryID===c.id&&d.BindingPathFromOrigin===c.path&&d.Value===c.value&&d.ReportingStandardID===app.formComposer.reportingStandardID&&!d.IsNotValue&&!d.IsPertinentNegative);
     if(!defs.length)throw Error('Exact agency preset definition not found for this form version.');
     if(defs.some(d=>!!d.IsMultiselect!==c.multi))throw Error('Preset definition type conflicts.');
