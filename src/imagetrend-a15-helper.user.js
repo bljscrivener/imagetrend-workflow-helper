@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ImageTrend A15 MVP helper
 // @namespace    local.imagetrend.workflow
-// @version      0.1.3
+// @version      0.1.4
 // @description  Review/apply vetted routine A15 ImageTrend defaults on the currently open form view. Never saves/submits.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        none
@@ -101,7 +101,7 @@
   }
   function disabledChoice(node, c) {
     for (let n = node; n && c.contains(n); n = n.parentElement) {
-      if (n.disabled || n.matches(':disabled') || n.getAttribute('aria-disabled') === 'true' ||
+      if (n.classList.contains('disabled') || n.disabled || n.matches(':disabled') || n.getAttribute('aria-disabled') === 'true' ||
           n.getAttribute('aria-readonly') === 'true') return true;
       if (n === c) break;
     }
@@ -299,15 +299,104 @@
     } else await setChoice(el,rule.target,before);
   }
 
+
+  const PROCEDURE_NAMES = ['Assessment -ALS', 'Neurological assessment', 'Adult pain assessment', 'Moving a patient to a stretcher'];
+  const PROCEDURE_ID = '02dffd5f-4c68-506b-881d-5b00c78090aa';
+  function procedureFlyout() {
+    const found = [...document.querySelectorAll('.grid-flyout-overlay.grid-flyout-active')]
+      .filter(visible).filter(f => [...f.querySelectorAll('.grid-label')].some(n => norm(n.textContent) === 'Procedure'));
+    if (found.length !== 1) throw new Error('Open one blank Procedure entry with ImageTrend Add first.');
+    return found[0];
+  }
+  function procedureField(f) {
+    const fields = [...f.querySelectorAll('[id]')].filter(n => n.id === PROCEDURE_ID && visible(n));
+    if (fields.length !== 1) throw new Error('Procedure selector missing or ambiguous.');
+    return fields[0];
+  }
+  function procedureKey(f) {
+    const dates = [...f.querySelectorAll('input[id$="25443Date"]')].filter(visible);
+    if (dates.length !== 1) throw new Error('Procedure entry identity missing or ambiguous.');
+    return dates[0].id;
+  }
+  function procedureButton(f, handler, label) {
+    const buttons = [...f.querySelectorAll('button.grid-button')].filter(visible)
+      .filter(b => norm(b.textContent) === label && (b.getAttribute('data-bind') || '').includes('grid.' + handler + '($context)'));
+    if (buttons.length !== 1 || disabledChoice(buttons[0], f)) throw new Error(label + ' unavailable or disabled.');
+    return buttons[0];
+  }
+  async function addProcedureBundle(onProgress) {
+    const url = location.href;
+    if (!/\/Incident\d+\/Form42(?:$|[/?])/.test(location.hash)) throw new Error('Open a Form42 chart.');
+    const storageKey = 'it-a15-procedure-bundle:' + url;
+    if (sessionStorage.getItem(storageKey)) throw new Error('Bundle already attempted in this tab. Review existing procedures before adding anything manually.');
+    let f = procedureFlyout();
+    if (!blank(readField(procedureField(f)))) throw new Error('The open procedure is populated. Open a blank entry first.');
+    procedureKey(f);
+    procedureButton(f, 'addAnotherButtonClickHandler', 'Add Another');
+    procedureButton(f, 'okButtonClickHandler', 'OK');
+    // Persist before the first mutation: failed/partial runs must not be blindly repeated.
+    sessionStorage.setItem(storageKey, 'started');
+    for (let i = 0; i < PROCEDURE_NAMES.length; i++) {
+      if (location.href !== url) throw new Error('Chart changed during bundle.');
+      f = procedureFlyout();
+      const field = procedureField(f), key = procedureKey(f);
+      if (!blank(readField(field))) throw new Error('Expected a new blank procedure. Stopped to preserve it.');
+      // The captured single-select can filter its resource list through searchTerm.
+      await expose(field);
+      if (!optionNodes(field, PROCEDURE_NAMES[i]).some(visible)) {
+        const searches = [...field.querySelectorAll('input.koSingleselect-searchbar-input')].filter(visible);
+        if (searches.length === 1) {
+          nativeSetInput(searches[0], PROCEDURE_NAMES[i]);
+          const searchDeadline = Date.now() + 2000;
+          while (Date.now() < searchDeadline && !optionNodes(field, PROCEDURE_NAMES[i]).some(visible)) await sleep(100);
+        }
+      }
+      if (location.href !== url || procedureFlyout() !== f || procedureKey(f) !== key || !blank(readField(field)))
+        throw new Error('Procedure changed while finding option.');
+      await setChoice(field, PROCEDURE_NAMES[i], readField(field));
+      if (location.href !== url || procedureFlyout() !== f || procedureKey(f) !== key ||
+          !same(readField(field), PROCEDURE_NAMES[i])) throw new Error('Procedure changed before confirmation.');
+      const last = i === PROCEDURE_NAMES.length - 1;
+      procedureButton(f, last ? 'okButtonClickHandler' : 'addAnotherButtonClickHandler', last ? 'OK' : 'Add Another').click();
+      const deadline = Date.now() + 5000;
+      let advanced = false;
+      while (Date.now() < deadline) {
+        if (location.href !== url) throw new Error('Chart changed during bundle.');
+        if (last) {
+          if (![...document.querySelectorAll('.grid-flyout-overlay.grid-flyout-active')].some(visible)) { advanced = true; break; }
+        } else {
+          try {
+            const next = procedureFlyout();
+            if (procedureKey(next) !== key && blank(readField(procedureField(next)))) { advanced = true; break; }
+          } catch (_) { /* transient flyout replacement */ }
+        }
+        await sleep(100);
+      }
+      if (!advanced) throw new Error('ImageTrend did not advance after ' + PROCEDURE_NAMES[i] + '. Inspect the open entry; do not rerun blindly.');
+      onProgress(PROCEDURE_NAMES[i]);
+    }
+    sessionStorage.setItem(storageKey, 'completed');
+  }
+
   const host=document.createElement('div');
   host.id='it-a15-helper-host'; host.style.cssText='position:fixed;right:16px;top:64px;z-index:2147483645';
   const root=host.attachShadow({mode:'open'});
-  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.3</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><p class="meta">No automatic Save/submit. Procedure creation/timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
+  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.4</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><hr><p><strong>Add four procedures</strong>: Assessment -ALS; Neurological assessment; Adult pain assessment; Moving a patient to a stretcher.</p><p class="meta">Start with a blank Procedure entry open. Uses Add Another and OK. Review dates, times and clinical details afterward.</p><label><input id="procack" type="checkbox"> These four procedures were performed, are missing from this chart, and I want to add them.</label><p><button id="procrun" disabled>Add four procedures</button></p><p class="meta">No automatic chart Save/submit. Procedure timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
   document.body.append(host);
   const $=s=>root.querySelector(s); let plan=[],busy=false,planUrl='';
   const log=t=>{$('#log').textContent+=`${t}\n`;};
   function invalidate(){plan=[];planUrl='';$('#rows').textContent='';$('#ack').checked=false;$('#run').disabled=true;}
   function render(items){$('#rows').textContent='';for(const item of items){const row=document.createElement('div');row.className='row';const cb=document.createElement('input');cb.type='checkbox';cb.checked=item.status==='ready';cb.disabled=item.status!=='ready';item.check=cb;const body=document.createElement('div');const title=document.createElement('div');title.className=item.status;title.textContent=`${item.rule.label} -> ${item.rule.target}`;const meta=document.createElement('div');meta.className='meta';const cur=Array.isArray(item.before)?item.before.join(', '):norm(item.before);meta.textContent=`${item.status.toUpperCase()} | current: ${cur||'(blank)'}${item.rule.derived?` | ${item.rule.derived}`:''}${item.note?` | ${item.note}`:''}`;body.append(title,meta);row.append(cb,body);$('#rows').append(row);}}
+  $('#procack').onchange=()=>{$('#procrun').disabled=busy||!$('#procack').checked;};
+  $('#procrun').onclick=async()=>{
+    if(busy||!$('#procack').checked)return;
+    busy=true; invalidate(); $('#scan').disabled=true; $('#procrun').disabled=true; $('#procack').disabled=true;
+    try {
+      await addProcedureBundle(name=>log('Procedure entered: '+name));
+      log('Four procedure selections entered and flyout closed. Review the procedure list, dates/times, and details. Chart Save was not clicked.');
+    } catch(e) { log('Procedure bundle STOPPED: '+e.message); log('Earlier entries may remain. Review the procedure list and open entry.'); }
+    finally { busy=false; $('#scan').disabled=false; $('#procack').disabled=false; $('#procack').checked=false; $('#procrun').disabled=true; }
+  };
   $('#launch').onclick=()=>{$('section').hidden=false;$('#launch').hidden=true;}; $('#hide').onclick=()=>{$('section').hidden=true;$('#launch').hidden=false;};
   $('#ack').onchange=()=>{$('#run').disabled=busy||!plan.length||!$('#ack').checked||!plan.some(x=>x.status==='ready'&&x.check?.checked);}; window.addEventListener('hashchange',invalidate);
   $('#scan').onclick=()=>{invalidate();$('#log').textContent='';try{if(!/\/Incident\d+\/Form42(?:$|[/?])/.test(location.hash))throw new Error('Open an ImageTrend Form42 incident chart.');plan=buildPlan();planUrl=location.href;render(plan);const r=plan.filter(x=>x.status==='ready').length,c=plan.filter(x=>x.status==='conflict').length,m=plan.filter(x=>x.status==='manual'||x.status==='blocked').length;log(`Found ${plan.length} recognized A15 fields: ${r} ready; ${c} conflicts; ${m} manual/blocked.`);}catch(e){log(`Scan stopped: ${e.message}`);}};
