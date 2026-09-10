@@ -1,4 +1,8 @@
-# A15 Native Test 0.2.4.1
+# Gremlin Logic A15 Native Test
+
+Current release: **0.2.4.9**. See [current release notes](../RELEASE-0.2.4.9.md) for installation, supported workflows, local snapshot retention, bounded auto-healing and validation limits. Historical notes below describe earlier versions; current behavior supersedes their checkbox, preview and blanket failure requirements.
+
+## Historical 0.2.4.1 baseline
 
 Separate experimental successor to A15 0.2.4, based on Preset Lab 0.2.2. Disable A15 and Preset Lab while testing this script. Stable A15 is unchanged.
 

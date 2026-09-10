@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
   const source = fs.readFileSync('src/imagetrend-a15-native-test.user.js','utf8');
   const code = source.slice(source.indexOf('  const choices='),source.indexOf('  const host=')) + source.slice(source.indexOf('  let times='),source.indexOf('  function reset')) + source.slice(source.indexOf('  const procedureWorkflow='),source.indexOf('  function currentRoot'));
   const results = await page.evaluate(async code => {
-    eval(code + ';window.api={PROCEDURE_NAMES:["Assessment -ALS","Neurological assessment","Adult pain assessment","Moving a patient to a stretcher"],addProcedureBundle:async cb=>{await readTimes();return procedureWorkflow(api.PROCEDURE_NAMES,cb);}};');
+    const stopRequested=false;const localStamp=x=>{const d=new Date(x),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());};eval(code + ';window.api={PROCEDURE_NAMES:["Assessment -ALS","Neurological assessment","Adult pain assessment","Moving a patient to a stretcher"],addProcedureBundle:async cb=>{await readTimes();return procedureWorkflow(api.PROCEDURE_NAMES,cb);}};');
     const results=[];
     for (const mode of ['success','search','midnight','badtime','norole','populated','disabled','missing','duplicate','noadvance','retry']) {
       sessionStorage.clear();
@@ -82,7 +82,7 @@ const { chromium } = require('playwright');
     return results;
   },code);
   for(const result of results){ console.log(result.mode,result.error);
-    const success=['success','search','midnight'].includes(result.mode);
+    const success=['success','search','midnight','retry'].includes(result.mode);
     assert.equal(!result.error,success||result.mode==='repair',result.mode);
     assert.equal(result.commits.length,success?4:result.mode==='noadvance'?1:0,result.mode);
     if(success)assert.deepEqual(result.commits,['Assessment -ALS','Neurological assessment','Adult pain assessment','Moving a patient to a stretcher']);

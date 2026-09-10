@@ -4,7 +4,9 @@
   "version": "0.2.4",
   "scripts": {
     "test": "node tests/run.cjs",
-    "check": "node --check src/imagetrend-a15-helper.user.js"
+    "check": "node --check src/imagetrend-a15-helper.user.js",
+    "test:native": "node tests/run-native.cjs",
+    "check:native": "node --check src/imagetrend-a15-native-test.user.js"
   },
   "devDependencies": {
     "playwright": "1.62.1"
