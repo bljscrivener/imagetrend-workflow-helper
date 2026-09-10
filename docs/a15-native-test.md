@@ -15,3 +15,10 @@ Validation: syntax and synthetic browser tests passed, including both previously
 
 Adds Copy field mappings above the selector. Open a vital or procedure entry, click this button and paste into the development chat. Capture whitelists binding paths, definition/control identifiers and multiplicity flags; no answer values are included. Clipboard failures display an error. Existing A15 native write scope is unchanged; repeated entries remain pending these mappings. Synthetic capture tests confirm no answer leakage or writes.
 
+
+## 0.2.4.4 existing-entry native test
+
+Uses captured paths to enumerate all existing vital entries and the four recognized A15 procedure types. Preview explicitly shows replacements for existing vital metadata/procedure details; the acknowledgment covers those replacements. Measured numbers, timestamps, crew IDs, and procedure names are not targets. No procedure creation. Existing non-A15 procedures are blocked. Object identity is retained across reordering, and removal or changed answers invalidates the review. Nested qualifier collections remain scoped to their vital entry. The native API must resolve indexed paths and return the expected display or that action fails closed. These new paths are synthetically tested, not live-verified.
+
+Tests cover two vital entries, replacement AVPU and GCS, nested GCS qualifiers, recognized procedure role correction, unrelated procedure preservation, reordering, removal, protected blood pressure, and repeat prevention. Earlier versions' blanket repeated-entry exclusion is superseded by this section.
+
