@@ -34,7 +34,10 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
    // Different IDs, label-addressed timeline, delayed native binding.
    const times=[['Unit Notified by Dispatch','10:56:00'],['Unit En Route Date/Time','10:57:00'],['Unit Arrived on Scene','10:58:00'],['Arrived at Patient','11:00:00'],['Unit Left Scene','11:15:00'],['Arrived at Destination','11:35:00'],['Unit Back in Service','12:00:20']];
    document.body.insertAdjacentHTML('beforeend',times.map(([label,time],i)=>`<div class="row"><span>${label}:</span><div><input id="changed${i}Date" value="09/09/2026"><input id="changed${i}Time" value="${time}"></div></div>`).join(''));
-   await api.readTimes();out.patient=api.procedureTiming('Assessment -ALS').value;out.stretcher=api.procedureTiming('Moving a patient to a stretcher').value;out.delays=api.delayChoices();
+   // A lone patient-contact field is not a loaded response timeline.
+   const rows=[...document.querySelectorAll('.row')];rows.forEach((row,i)=>row.style.display=i===3?'':'none');
+   const opener=document.createElement('button');opener.id='response-times-tool';let opens=0;opener.onclick=()=>{opens++;rows.forEach(row=>row.style.display='');};document.body.append(opener);
+   await api.readTimes();out.opens=opens;opener.remove();out.patient=api.procedureTiming('Assessment -ALS').value;out.stretcher=api.procedureTiming('Moving a patient to a stretcher').value;out.delays=api.delayChoices();
    document.querySelector('#changed5Time').value='';await api.readTimes();out.missing=api.missingTimes(['29338']);
    // Native picker emulates a timezone-aware model while the rendered time stays local.
    document.body.insertAdjacentHTML('beforeend','<div class="grid-flyout-active"><input id="testDate"><div><input id="testTime"></div></div><div id="date-picker" style="display:none"><div class="header"><span class="close"></span></div><div class="time-button"><span class="time-button-label">Patient Arrival</span></div><div class="time-button"><span class="time-button-label">Destination Arrival</span></div><div class="minute"><button class="minus-button">-</button></div></div>');
@@ -52,6 +55,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
  assert.deepEqual(results.p2,['Without Lights and Sirens','No Lights or Sirens','Emergency Response (Primary Response Area)']);assert.ok(results.replaces&&results.repeat);
  assert.equal(results.p5,'Without Lights and Sirens');assert.match(results.p5Service,/confirm transfer/);assert.match(results.noPriority,/missing or unsupported/);assert.equal(results.scalar,'Stretcher');
  assert.equal(results.patient,'2026-09-09T11:00:00');assert.equal(results.stretcher,'2026-09-09T11:13:00');assert.equal(results.delays.find(x=>x.label==='Scene Delay').target,'None/No Delay');assert.equal(results.delays.find(x=>x.label==='Destination Delay').targets.length,2);assert.equal(results.delays.some(x=>x.label==='Response Delay'),false);assert.match(results.missing,/Arrived at Destination/);
+ assert.equal(results.opens,2,'open full timeline and restore it');
  assert.deepEqual(results.native,['09/09/2026','11:00:00','2026-09-09T16:00:00.000Z']);assert.deepEqual(results.midnight,['09/09/2026','23:58:00']);
  console.log('PASS priority transitions, direct-entry multiselects, label-based timeline, native timezone read-back, midnight subtraction');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1);});

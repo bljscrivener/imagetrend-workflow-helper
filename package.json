@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.2.4",
   "scripts": {
+    "build:native": "node scripts/build-native.cjs",
     "test": "node tests/run.cjs",
     "check": "node --check src/imagetrend-a15-helper.user.js",
     "test:native": "node tests/run-native.cjs",

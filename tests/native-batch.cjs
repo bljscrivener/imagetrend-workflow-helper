@@ -51,6 +51,9 @@ const fs=require('fs'),assert=require('node:assert/strict'),{chromium}=require('
  await h.locator('#apply').click();await page.waitForFunction(()=>!document.querySelector('#it-a15-native-test').shadowRoot.querySelector('#apply').disabled);assert.equal(await page.evaluate(()=>failedAttempts),1);assert.match(await h.locator('#issues').textContent(),/native write failed/);
  await page.screenshot({path:'../../outputs/a15-gremlin-preview.png'});
  // Clear requires both warnings and keeps the timeline while reporting incomplete scope.
+ await h.getByRole('button',{name:'Tools / Settings',exact:true}).click();
+ assert.equal(await h.locator('#apply').isVisible(),false);
+ assert.equal(await h.locator('#copy-diagnostic-log').isVisible(),true);
  await page.evaluate(()=>{for(const key of ['Vitals','PatientProcedures']){const list=model.Incident.Scene.Response.Patient[key];list.removeAll=()=>list.splice(0);}window.confirm=()=>true;});
  await h.locator('#clear-entries').click();await h.locator('#nuke-confirm').waitFor();assert.equal(await h.locator('.nuke-dialog svg').count(),1);await h.locator('#nuke-cancel').click();assert.equal(await page.evaluate(()=>model.Incident.Scene.Response.Patient.Disposition.DispositionNumberOfPatientsTransportedModValue.NumberOfPatientsTransported),'1');
  await h.locator('#clear-entries').click();await h.locator('#nuke-confirm').click();await page.waitForFunction(()=>document.querySelector('#it-a15-native-test').shadowRoot.querySelector('#result').textContent.includes('Cleared'));assert.equal(await page.locator('[id="29336Time"]').inputValue(),'11:00:00');assert.equal(await page.evaluate(()=>model.Incident.Scene.Response.Patient.Disposition.DispositionNumberOfPatientsTransportedModValue.NumberOfPatientsTransported),null);assert.equal(await h.locator('.confetti').count(),0,'partial coverage is not celebrated as full clear');
