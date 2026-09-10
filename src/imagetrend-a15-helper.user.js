@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ImageTrend A15 MVP helper
 // @namespace    local.imagetrend.workflow
-// @version      0.1.1
+// @version      0.1.2
 // @description  Review/apply vetted routine A15 ImageTrend defaults on the currently open form view. Never saves/submits.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        none
@@ -69,6 +69,15 @@
   const blank = v => Array.isArray(v) ? v.length === 0 : norm(v) === '';
   const same = (a,b) => Array.isArray(a) ? a.length === 1 && norm(a[0]) === norm(b) : norm(a) === norm(b);
 
+  // Snapshot comparison is distinct from matching one requested choice.
+  function unchanged(a, b) {
+    if (Array.isArray(a) || Array.isArray(b)) {
+      return Array.isArray(a) && Array.isArray(b) &&
+        a.length === b.length && a.every((v, i) => norm(v) === norm(b[i]));
+    }
+    return norm(a) === norm(b);
+  }
+
   function optionNodes(c, targetText) {
     const target = norm(targetText);
     const nodes = [...c.querySelectorAll([
@@ -82,10 +91,21 @@
     ].join(','))].filter(n => norm(n.textContent) === target);
     return [...new Set(nodes)];
   }
-  function clickable(node) {
-    if (!node) return null;
-    if (node.matches('button,[role="option"],.koSingleselect-dropDownItem,.koMultiselect-dropDownItem,.koMultiselect-dropdown-item')) return node;
-    return node.closest('button,[role="option"],.koSingleselect-dropDownItem,.koMultiselect-dropDownItem,.koMultiselect-dropdown-item,li,div');
+  function clickable(node, c) {
+    // Stay inside this field. Never guess an arbitrary div/li or invoke KO directly.
+    for (let n = node; n && n !== c && c.contains(n); n = n.parentElement) {
+      if (n.matches('button,[role="option"],.koSingleselect-dropDownItem,.koMultiselect-dropDownItem,.koMultiselect-dropdown-item') ||
+          /(?:^|,)\s*click\s*:/.test(n.getAttribute('data-bind') || '')) return n;
+    }
+    return null;
+  }
+  function disabledChoice(node, c) {
+    for (let n = node; n && c.contains(n); n = n.parentElement) {
+      if (n.disabled || n.matches(':disabled') || n.getAttribute('aria-disabled') === 'true' ||
+          n.getAttribute('aria-readonly') === 'true') return true;
+      if (n === c) break;
+    }
+    return false;
   }
   async function expose(c) {
     const s = c.querySelector('button.koSingleselect-down-button');
@@ -97,16 +117,25 @@
   }
   async function setChoice(el, target, before) {
     const c = containerOf(el);
-    if (!same(readField(el), before)) throw new Error('Field changed since review.');
+    if (!unchanged(readField(el), before)) throw new Error('Field changed since review.');
     let nodes = optionNodes(c, target);
     if (!nodes.some(visible)) { await expose(c); nodes = optionNodes(c, target); }
-    const usable = [...new Set(nodes.map(clickable).filter(Boolean).filter(visible))];
+    const usable = [...new Set(nodes.filter(visible).map(n => clickable(n, c)).filter(Boolean).filter(visible))];
     if (usable.length !== 1) throw new Error(`Choice "${target}" missing or ambiguous.`);
     const node = usable[0];
-    if (node.disabled || node.getAttribute('aria-disabled') === 'true') throw new Error(`Choice "${target}" is disabled.`);
+    if (norm(node.textContent) !== norm(target)) throw new Error('Option click target contains unrelated content.');
+    if (disabledChoice(node, c)) throw new Error(`Choice "${target}" is disabled.`);
+    if (!el.isConnected || !visible(el) || !unchanged(readField(el), before))
+      throw new Error('Field changed since review.');
+    const chartUrl = location.href;
     node.click();
     const end = Date.now() + 3500;
-    while (Date.now() < end) { if (same(readField(el), target)) return; await sleep(100); }
+    while (Date.now() < end) {
+      if (location.href !== chartUrl || !el.isConnected || !visible(el))
+        throw new Error('Chart/view changed during selection.');
+      if (same(readField(el), target)) return;
+      await sleep(100);
+    }
     throw new Error(`ImageTrend did not confirm "${target}".`);
   }
   function nativeSetInput(el, value) {
@@ -264,7 +293,7 @@
     const {rule,el,before}=item;
     if (!el || item.status!=='ready') return;
     if (rule.input) {
-      if (!same(readField(el),before)) throw new Error(`${rule.label}: changed since review.`);
+      if (!unchanged(readField(el),before)) throw new Error(`${rule.label}: changed since review.`);
       nativeSetInput(el,rule.target); await sleep(120);
       if (!same(readField(el),rule.target)) throw new Error(`${rule.label}: ImageTrend did not confirm input change.`);
     } else await setChoice(el,rule.target,before);
@@ -273,7 +302,7 @@
   const host=document.createElement('div');
   host.id='it-a15-helper-host'; host.style.cssText='position:fixed;right:16px;top:64px;z-index:2147483645';
   const root=host.attachShadow({mode:'open'});
-  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.1</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><p class="meta">No automatic Save/submit. Procedure creation/timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
+  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.2</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><p class="meta">No automatic Save/submit. Procedure creation/timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
   document.body.append(host);
   const $=s=>root.querySelector(s); let plan=[],busy=false,planUrl='';
   const log=t=>{$('#log').textContent+=`${t}\n`;};
