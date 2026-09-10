@@ -36,7 +36,7 @@ Fill blank routine fields only:
 - Number transported: `1`
 - EMS Transport Method: `Ground-Ambulance`
 - Transport Mode from Scene: `Without Lights and Sirens`
-- Transport from Scene Type: `Initial Lights and Sirens, Downgraded to No Lights or Sirens`
+- Transport from Scene Type: `No Lights or Sirens`
 - Moved to ambulance: `Stretcher`
 - Patient Secured By: `Cot- 5 straps, Including Shoulders`
 - Position: `Semi-Fowlers`
@@ -123,3 +123,7 @@ Options with `getOptionDisplay($data)` resolve to an explicit option row or an a
 Validation: JavaScript syntax check and eight synthetic browser cases passed: bound ancestor with delayed selected-value update, generic container rejection, duplicate options, disabled ancestor, stale snapshot, no-op timeout, value change while opening, and role=option selection. Array snapshot checks also passed. Run the regression from the repository root with Playwright installed and Microsoft Edge available: `node tests/choice-adapter.cjs`.
 
 Live ImageTrend validation remains pending. Replace the installed script with v0.1.2, refresh, scan and review a blank transport multiselect, apply, and confirm the selected chip and the helper's confirmed-change log agree. Existing conflicting values must remain preserved.
+
+## v0.1.3 transport profile correction
+
+User screenshot and clarification confirm Transport from Scene Type should target `No Lights or Sirens`. The prior downgraded-response default was incorrect. An existing matching value now scans as KEPT; blank fields propose this corrected value. Other existing values remain conflicts. Transport Mode from Scene remains `Without Lights and Sirens`. Syntax check passed; live application of this version remains pending.
