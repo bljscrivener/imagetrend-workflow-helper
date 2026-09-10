@@ -35,6 +35,7 @@ const {chromium}=require('playwright');
  await page.waitForFunction(()=>document.querySelector('#it-a15-helper-host').shadowRoot.querySelector('#scan').dataset.state==='ready');
  assert.deepEqual(await page.evaluate(()=>window.model),{});
  assert.equal(await page.locator('#panel-header').textContent(),'STAT Info');
+ await h.locator('#rows .row').filter({hasText:'Add four routine procedures'}).locator('input').uncheck();
  await h.locator('#ack').check();await h.locator('#run').click();
  await page.waitForFunction(()=>document.querySelector('#it-a15-helper-host').shadowRoot.querySelector('#status').textContent.startsWith('Applied 4'));
  assert.deepEqual(await page.evaluate(()=>window.model),{'STAT Info':'Patient Contact Made','Dispatch':'Ground Transport (ALS Equipped)','History':'None Noted','Transport Info':'1'});

@@ -81,9 +81,9 @@ const {chromium}=require('playwright');
   await api.applyVitalSet(sets[0]);await api.applyVitalSet(sets[1]);
   check('multiple inline vitals from list',sets.length===2&&[...document.querySelectorAll('.koSingleselect-selectedItem-value')].every(n=>n.textContent==='Alert'));
   check('measured numeric vitals preserved',[...document.querySelectorAll('input[id$="25341"]')].every(n=>n.value==='123'));
-  document.body.innerHTML='<div id="form-composer"><div class="grid-control"><div class="grid-header"><div class="grid-label">Vital Signs</div></div><div class="grid-item-display"><div data-bind="click: grid.openItem($context)">Vital set 11:00</div></div></div></div>';
+  document.body.innerHTML='<div id="form-composer"><div class="grid-control"><div class="grid-header"><div class="grid-label">Vital Signs</div></div><div class="grid-item-display"><div class="modal-exclamation-container">!</div><div data-bind="click: function(){ imagetrend.formComposer.controlHandlers.grid.openGridItemAndCloseAllSiblings($context, true)}">Vital set 11:00</div></div></div></div>';
   let savedValue='',savedNumber='',openedCount=0;
-  document.querySelector('.grid-item-display > div').onclick=()=>{
+  document.querySelector('.grid-item-display > div[data-bind]').onclick=()=>{
     openedCount++;
     const fly=document.createElement('div');fly.className='grid-flyout-overlay grid-flyout-active';
     fly.innerHTML='<div class="grid-label">Vital Signs</div><input id="modal25333Date" value="09/09/2026"><input id="modal25341" value="123">'+field('7f5c88af-a3be-5947-b47b-ffe6cc957102','AVPU',['Alert'])+'<button class="grid-button" data-bind="click: grid.okButtonClickHandler($context)">OK</button><button class="grid-button" data-bind="click: grid.cancelButtonClickHandler($context)">Cancel</button>';

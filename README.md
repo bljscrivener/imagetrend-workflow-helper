@@ -1,6 +1,6 @@
 # ImageTrend Workflow Helper
 
-Routine A15 **v0.2.3** provides a tabbed, reviewed workflow for ImageTrend Elite.
+Routine A15 **v0.2.4** provides a tabbed, reviewed workflow for ImageTrend Elite.
 
 [Install the A15 userscript](https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-helper.user.js) in Tampermonkey, then refresh ImageTrend. Install the full script so its warning artwork resource is included.
 
@@ -32,3 +32,9 @@ Large Review whole chart and Go, baby, go controls, with a scrolling review list
 ## v0.2.3 attention review
 
 Failures and conflicts appear in a chart-scoped Needs attention log with links to the section and a temporary field highlight. Links never apply values. Independent changes continue; an open partial entry pauses remaining work and labels unattempted actions. Clear log also clears this issue history. Missing or ambiguous navigation is reported without guessing another target.
+
+## v0.2.4 vitals and visibility
+
+Live inspection found validation-exclamation siblings being mistaken for vital cards. These are excluded; regression coverage uses the captured openGridItemAndCloseAllSiblings handler beside a warning sibling. Individual metadata failures are recorded while other approved fields continue. An entry already open at apply start no longer triggers the partial-new-entry stop.
+
+Eligible procedure bundles are preselected and placed first, with review acknowledgment still required. Prior-attempt locks remain respected. Scan this view is small and neutral. Attention starts collapsed and the review list has a minimum height. Full dispatch reset and automatic ETCO2-unit clearing remain deferred.

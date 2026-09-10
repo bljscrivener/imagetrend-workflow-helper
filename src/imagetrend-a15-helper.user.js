@@ -3,7 +3,7 @@
 // @namespace    local.imagetrend.workflow
 // @updateURL    https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-helper.user.js
 // @downloadURL  https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-helper.user.js
-// @version      0.2.3
+// @version      0.2.4
 // @description  Review/apply vetted routine A15 ImageTrend defaults on the currently open form view. Never saves/submits.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        GM_getResourceURL
@@ -751,7 +751,7 @@
     const g=vitalGrid(), lists=g.querySelectorAll('.grid-item-display');
     if(lists.length!==1)throw new Error('Vital list not recognized.');
     if([...g.querySelectorAll('.grid-filter')].some(b=>!b.classList.contains('grid-button-highlighted')))throw new Error('Show all vital sets before reviewing.');
-    return [...lists[0].children].filter(visible);
+    return [...lists[0].children].filter(visible).filter(n=>!n.matches('.modal-exclamation-container'));
   }
   function vitalScope() {
     const dates=[...document.querySelectorAll('input[id$="25333Date"]')].filter(visible);
@@ -803,12 +803,14 @@
     const rows=vitalRows(), row=rows[set.index];
     if(!row||norm(row.textContent)!==set.fingerprint)throw new Error('Vital list changed since review.');
     const opened=await openVitalRow(row);
+    const failures=[], vitalChart=timelineChartKey();
     try {
       for(const item of set.items.filter(x=>x.status==='ready'&&x.selected!==false)) {
         const el=scopedField(opened.scope,item.rule.id);
-        await apply({...item,el,rule:{...item.rule,element:el}});
+        try{await apply({...item,el,rule:{...item.rule,element:el}});}catch(e){if(vitalChart!==timelineChartKey()||!opened.scope.isConnected)throw e;failures.push({item,message:e.message});}
       }
       if(opened.modal)await closeVital(opened.scope,true);
+      return failures;
     } catch(e) {throw new Error(e.message+' Review the open vital entry; earlier changes may remain.');}
   }
   const changeJournal=[];
@@ -855,12 +857,12 @@
   host.style.cssText='position:fixed;right:16px;top:60px;z-index:2147483645';
   const root=host.attachShadow({mode:'open'});
   root.innerHTML='<style>'+
-    ':host{font:13px/1.4 system-ui;color:#182a3d}*{box-sizing:border-box}button{font:inherit;cursor:pointer;padding:8px 11px;border:1px solid #a7b4c0;border-radius:7px;background:#fff;color:#182a3d}button:disabled{opacity:.48;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #2878b7;outline-offset:2px}#launch,#run{background:#165c88;color:white}section{display:flex;flex-direction:column;width:430px;min-width:350px;max-width:94vw;max-height:83vh;overflow:hidden;resize:horizontal;background:#fff;border:1px solid #a7b4c0;border-radius:12px;padding:14px;box-shadow:0 10px 30px #0004}header{display:flex;align-items:center;gap:8px;cursor:move}h2{font-size:17px;margin:0;flex:1}small,.meta{font-size:11px;color:#586b7a}nav{display:flex;gap:4px;margin:12px 0;flex-wrap:wrap}nav button{font-size:12px;padding:5px 8px}nav button[aria-selected=true]{background:#183f5b;color:white}.actions{display:flex;align-items:stretch;gap:7px;margin:10px 0}#whole{flex:1;font-weight:700;font-size:15px;padding:12px}#timeline{margin-left:auto;min-width:110px}button[data-state=pending]{background:#ffdf80;color:#49370c}button[data-state=ready]{background:#bde6c7;color:#154424}button[data-state=error]{background:#f6b9b9;color:#721a1a}.row{display:flex;gap:8px;border-top:1px solid #e4e9ed;padding:9px 0}.row input{margin-top:4px}.ready{color:#195a30}.conflict,.manual{color:#8a5400}.blocked{color:#9c2323}#status{padding:9px;background:#edf3f7;border-radius:6px;margin:8px 0}#status[data-error=true]{background:#fce2df;color:#84221a}#log{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.5 ui-monospace,monospace;max-height:190px;overflow:auto;background:#f3f5f7;padding:8px}details{margin-top:12px}summary{cursor:pointer;font-weight:600}.danger{background:#b6252b;color:white;border-color:#a51c23}.footer{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.modal{position:fixed;inset:0;background:#071524ba;display:flex;align-items:center;justify-content:center;z-index:2147483647}.dialog{width:420px;max-width:92vw;max-height:88vh;overflow:auto;background:#fff6dc;border:3px solid #193d55;border-radius:16px;padding:18px;box-shadow:0 12px 50px #0008}.art{height:195px;overflow:hidden;margin:-18px -18px 15px;background:#193d55}.art img{width:100%;display:block;transform:translateY(-26px)}.dialog h3{font-size:20px;margin:8px 0}.dialog .footer{justify-content:space-between}.dialog button{font-size:15px;font-weight:700}#issues{max-height:150px;overflow:auto}.issue{padding:7px;background:#fff4d5;border-radius:6px;margin:5px 0}.issue a{color:#165c88;text-decoration:underline;font-weight:600}#rows{overflow:auto;min-height:0;flex:1}header,nav,.actions,#acklabel,#status,#context,section>details,section>p{flex-shrink:0}#clearlist{max-height:260px;overflow:auto}[hidden]{display:none!important}'+
-    '</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.2.3</small></h2><button id="hide">Minimize</button></header>'+
+    ':host{font:13px/1.4 system-ui;color:#182a3d}*{box-sizing:border-box}button{font:inherit;cursor:pointer;padding:8px 11px;border:1px solid #a7b4c0;border-radius:7px;background:#fff;color:#182a3d}button:disabled{opacity:.48;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #2878b7;outline-offset:2px}#launch,#run{background:#165c88;color:white}section{display:flex;flex-direction:column;width:430px;min-width:350px;max-width:94vw;max-height:83vh;overflow:hidden;resize:horizontal;background:#fff;border:1px solid #a7b4c0;border-radius:12px;padding:14px;box-shadow:0 10px 30px #0004}header{display:flex;align-items:center;gap:8px;cursor:move}h2{font-size:17px;margin:0;flex:1}small,.meta{font-size:11px;color:#586b7a}nav{display:flex;gap:4px;margin:12px 0;flex-wrap:wrap}nav button{font-size:12px;padding:5px 8px}nav button[aria-selected=true]{background:#183f5b;color:white}.actions{display:flex;align-items:stretch;gap:7px;margin:10px 0}#whole{flex:1;font-weight:700;font-size:15px;padding:12px}#timeline{margin-left:auto;min-width:110px}button[data-state=pending]{background:#ffdf80;color:#49370c}button[data-state=ready]{background:#bde6c7;color:#154424}button[data-state=error]{background:#f6b9b9;color:#721a1a}.row{display:flex;gap:8px;border-top:1px solid #e4e9ed;padding:9px 0}.row input{margin-top:4px}.ready{color:#195a30}.conflict,.manual{color:#8a5400}.blocked{color:#9c2323}#status{padding:9px;background:#edf3f7;border-radius:6px;margin:8px 0}#status[data-error=true]{background:#fce2df;color:#84221a}#log{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.5 ui-monospace,monospace;max-height:190px;overflow:auto;background:#f3f5f7;padding:8px}details{margin-top:12px}summary{cursor:pointer;font-weight:600}.danger{background:#b6252b;color:white;border-color:#a51c23}.footer{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.modal{position:fixed;inset:0;background:#071524ba;display:flex;align-items:center;justify-content:center;z-index:2147483647}.dialog{width:420px;max-width:92vw;max-height:88vh;overflow:auto;background:#fff6dc;border:3px solid #193d55;border-radius:16px;padding:18px;box-shadow:0 12px 50px #0008}.art{height:195px;overflow:hidden;margin:-18px -18px 15px;background:#193d55}.art img{width:100%;display:block;transform:translateY(-26px)}.dialog h3{font-size:20px;margin:8px 0}.dialog .footer{justify-content:space-between}.dialog button{font-size:15px;font-weight:700}#issues{max-height:150px;overflow:auto}.issue{padding:7px;background:#fff4d5;border-radius:6px;margin:5px 0}.issue a{color:#165c88;text-decoration:underline;font-weight:600}#scan{align-self:flex-start;background:#fff!important;color:#182a3d!important;padding:6px 10px}#rows{overflow:auto;min-height:140px;flex:1}section{overflow:auto}header,nav,.actions,#acklabel,#status,#context,section>details,section>p{flex-shrink:0}#clearlist{max-height:260px;overflow:auto}[hidden]{display:none!important}'+
+    '</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.2.4</small></h2><button id="hide">Minimize</button></header>'+
     '<nav aria-label="Helper sections"></nav><div id="context" class="meta"></div>'+
     '<div class="actions"><button id="whole" data-state="pending">Review whole chart</button><button id="timeline" data-state="pending">Read timeline</button></div>'+
     '<button id="scan" data-state="pending">Scan this view</button><div id="status" role="status">Choose Routine A15, then review the proposed changes.</div>'+
-    '<details id="attention" hidden open><summary>Needs attention</summary><div id="issues"></div></details><div id="rows"></div><label id="acklabel"><input id="ack" type="checkbox"> These selections match the care provided. I reviewed the changes.</label>'+
+    '<details id="attention" hidden><summary>Needs attention</summary><div id="issues"></div></details><div id="rows"></div><label id="acklabel"><input id="ack" type="checkbox"> These selections match the care provided. I reviewed the changes.</label>'+
     '<div class="actions"><button id="run" disabled>Go, baby, go</button></div>'+
     '<div id="cleararea" hidden><p>Clear selected values added by this helper since this page loaded. Existing answers and measured vital values are excluded. Open the relevant entry to make its fields available.</p><div id="clearlist"></div><button id="clearvalues" class="danger" disabled>Clear selected values</button></div>'+
     '<details><summary>Log &amp; testing</summary><div class="footer"><button id="reconlink" hidden>Recon this view</button><button id="clearlog">Clear log</button><button id="resettest">Reset procedure test</button></div><div id="log"></div></details>'+
@@ -923,8 +925,8 @@
   }
   function render(){
     $('#rows').replaceChildren();
-    for(const item of plan){
-      item.selected=item.selected??(item.status==='ready'&&item.kind!=='bundle');
+    for(const item of [...plan].sort((a,b)=>(b.kind==='bundle')-(a.kind==='bundle'))){
+      item.selected=item.selected??(item.status==='ready');
       const label=item.kind==='bundle'?'Add four routine procedures':item.kind==='vitalset'?'Vital set '+(item.index+1):item.rule.label+' → '+(Array.isArray(item.rule.target)?item.rule.target.join(' + '):item.rule.target);
       let detail=item.note||((item.section?item.section+' · ':'')+item.status.toUpperCase()+' · Current: '+(listValue(item.before).join(', ')||'(blank)')+(item.rule.derived?' · '+item.rule.derived:''));
       if(item.kind==='vitalset')detail=item.items.filter(i=>i.status==='ready').length+' metadata changes; '+item.items.filter(i=>i.status==='conflict').length+' conflicts preserved. Measured values untouched.';
@@ -973,6 +975,7 @@
     if(sectionKind()!=='Treatment')return null;
     try{
       const timing={arrival:patientArrivalTime(),stretcher:stretcherTime()};
+      if(sessionStorage.getItem('it-a15-procedure-bundle:'+location.href))return {kind:'bundle',status:'manual',note:'Procedure bundle previously attempted. Review existing entries before resetting the test lock.'};
       const fly=[...document.querySelectorAll('.grid-flyout-active')].filter(visible);
       if(fly.length&&!blank(readField(procedureField(procedureFlyout()))))return null;
       if(!fly.length){
@@ -1014,6 +1017,7 @@
   async function applyPlan(){
     if(planKey!==timelineChartKey())throw new Error('Chart changed. Scan again.');
     const selected=plan.filter(x=>x.selected&&x.status==='ready'), origin=panelName();
+    const initialFlyouts=new Set([...document.querySelectorAll('.grid-flyout-active')].filter(visible));
     let count=0;const waiting=[];
     const attempt=async item=>{
       if(planKey!==timelineChartKey())throw new Error('Chart changed during apply.');
@@ -1022,7 +1026,11 @@
         const current={arrival:patientArrivalTime(),stretcher:stretcherTime()};
         if(JSON.stringify(current)!==JSON.stringify(item.timing))throw new Error('Procedure timeline changed since review.');
         await addProcedureBundle(name=>log('Added: '+name));
-      }else if(item.kind==='vitalset')await applyVitalSet(item);
+      }else if(item.kind==='vitalset'){
+        const failures=await applyVitalSet(item);
+        for(const failure of failures)addIssue({...failure.item,section:item.section},'Vital set '+(item.index+1)+': '+failure.message);
+        if(failures.length){item.status='blocked';item.selected=false;item.note=failures.length+' metadata fields need attention; other approved fields processed.';return;}
+      }
       else {
         const el=item.rule.action==='activation'?namedGrid('Hospital Team Activations'):oneVisibleById(item.rule.id);
         if(!el)throw new Error('Reviewed field disappeared: '+item.rule.label);
@@ -1039,7 +1047,7 @@
         // Retry only absent options, never partial procedure/grid writes or ambiguous choices.
         if(!item.kind&&!item.rule.action&&/^Choice .* missing or ambiguous/.test(e.message)&&optionNodes(containerOf(oneVisibleById(item.rule.id)||document.createElement('div')),item.rule.target).filter(visible).length===0){waiting.push(item);item.note='Waiting for available options; will retry after approved fields.';}
         else {item.status='blocked';item.selected=false;}
-        if([...document.querySelectorAll('.grid-flyout-active')].some(visible)){for(const pending of selected.slice(selected.indexOf(item)+1)){pending.status='blocked';pending.selected=false;pending.note='Not attempted: review and close the open entry first.';}break;}
+        if([...document.querySelectorAll('.grid-flyout-active')].some(n=>visible(n)&&!initialFlyouts.has(n))){for(const pending of selected.slice(selected.indexOf(item)+1)){pending.status='blocked';pending.selected=false;pending.note='Not attempted: review and close the open entry first.';}break;}
       }
     }
     for(const item of waiting){try{await attempt(item);}catch(e){if(planKey!==timelineChartKey())throw e;item.status='blocked';item.selected=false;item.note='Needs attention: '+e.message;}}
