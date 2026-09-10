@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ImageTrend Preset Lab (experimental)
 // @namespace    local.imagetrend.presetlab
-// @version      0.2.1
+// @version      0.2.2
 // @description  Isolated, reviewed native preset field experiment. Two reviewed preset fields from any chart section.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        none
@@ -19,7 +19,7 @@
   const host=document.createElement('div');host.id='it-preset-lab';
   host.style.cssText='position:fixed;left:315px;bottom:65px;z-index:2147483646';
   const ui=host.attachShadow({mode:'open'});
-  ui.innerHTML='<style>:host{font:14px system-ui;color:#253144}section{background:white;border:2px solid #864ca3;border-radius:12px;padding:16px;width:380px;max-width:85vw;max-height:70vh;overflow:auto;box-shadow:0 8px 24px #0004}button,select{font:inherit;padding:8px;margin:5px 0}select{width:100%}pre{white-space:pre-wrap;font:12px system-ui;background:#f4edf8;padding:9px}label{display:block;margin:10px 0}h3{margin:0}small{display:block;margin:8px 0}button{cursor:pointer}#apply{background:#864ca3;color:white;border:0;border-radius:5px}button:disabled{opacity:.45}[hidden]{display:none!important}</style><button id="launch">Preset Lab</button><section hidden><h3>Preset Lab · experimental 0.2.1</h3><small>Use on your TEST chart. Native field updates may persist immediately. This does not call the preset audit or chart Save.</small><select id="choice"></select><button id="preview">Preview selected values</button><pre id="result">Preview either test field from any chart section. Both test fields are selected by default; no navigation needed.</pre><label><input id="ack" type="checkbox">This is a TEST chart and this displayed value is appropriate.</label><button id="apply" disabled>Apply selected values</button> <button id="hide">Minimize</button></section>';
+  ui.innerHTML='<style>:host{font:14px system-ui;color:#253144}section{background:white;border:2px solid #864ca3;border-radius:12px;padding:16px;width:380px;max-width:85vw;max-height:70vh;overflow:auto;box-shadow:0 8px 24px #0004}button,select{font:inherit;padding:8px;margin:5px 0}select{width:100%}pre{white-space:pre-wrap;font:12px system-ui;background:#f4edf8;padding:9px}label{display:block;margin:10px 0}h3{margin:0}small{display:block;margin:8px 0}button{cursor:pointer}#apply{background:#864ca3;color:white;border:0;border-radius:5px}button:disabled{opacity:.45}[hidden]{display:none!important}</style><button id="launch">Preset Lab</button><section hidden><h3>Preset Lab · experimental 0.2.2</h3><small>Use on your TEST chart. Native field updates may persist immediately. This does not call the preset audit or chart Save.</small><select id="choice"></select><button id="preview">Preview selected values</button><pre id="result">Preview either test field from any chart section. Both test fields are selected by default; no navigation needed.</pre><label><input id="ack" type="checkbox">This is a TEST chart and this displayed value is appropriate.</label><button id="apply" disabled>Apply selected values</button> <button id="hide">Minimize</button></section>';
   document.body.append(host);
   const $=s=>ui.querySelector(s);let reviewed=null,busy=false;
   for(const [i,c] of choices.entries()){const o=document.createElement('option');o.value=i;o.textContent=c.label;$('#choice').append(o);}
@@ -50,12 +50,26 @@
     const roots=[...new Set(contexts.flatMap(context=>[context.$data,...(context.$parents||[])]))].filter(r=>{try{return resolve(r,endpoint,ko)!=null;}catch(_){return false;}});
     if(roots.length!==1)throw Error('Could not uniquely resolve the native incident context.');
     const root=roots[0],branch=resolve(root,endpoint,ko);
-    const snapshot=JSON.stringify(ko.toJS(branch));
+    // Snapshot only the answer and its special-value flags, never model parent links.
+    const valueKey=c.path.slice(c.path.lastIndexOf('.')+1);
+    const readAnswer=answer=>{
+      answer=ko.unwrap(answer);
+      if(!answer||typeof answer!=='object')throw Error('Native answer structure unavailable.');
+      return [valueKey,'NotValue','PertinentNegative','PlusOneCode'].map(key=>{
+        const value=ko.unwrap(answer[key]);
+        if(value!=null&&!['string','number','boolean'].includes(typeof value))throw Error('Unexpected native answer type.');
+        return value??null;
+      });
+    };
+    const collection=ko.unwrap(branch);
+    if(c.multi&&!Array.isArray(collection))throw Error('Native answer collection unavailable.');
+    const answers=c.multi?collection.map(item=>readAnswer(resolve(item,c.path.split('[].')[1].split('.').slice(0,-1).join('.'),ko))):readAnswer(branch);
+    const snapshot=JSON.stringify(answers);
     const vm=new app.runForm.PresetValueViewModel({...defs[0]},root);
     const current=norm(ko.unwrap(vm.currentValueDisplay)),target=norm(ko.unwrap(vm.presetValueDisplay));
     if(!target||target===c.value)throw Error('Native preset could not translate the target code to a display value.');
     // The native multiselect writer removes all entries, so only an empty collection is eligible.
-    const canApply=!current&&(!c.multi||(Array.isArray(ko.unwrap(branch))&&ko.unwrap(branch).length===0));
+    const canApply=!current&&(c.multi?collection.length===0:answers.every(value=>value==null||value===''));
     return {c,root,vm,snapshot,current,target,canApply,url:location.href,endpoint};
   }
   $('#launch').onclick=()=>{$('section').hidden=false;$('#launch').hidden=true;};
