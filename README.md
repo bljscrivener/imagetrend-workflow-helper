@@ -1,6 +1,6 @@
 # ImageTrend Workflow Helper
 
-Routine A15 **v0.2.1** provides a tabbed, reviewed workflow for ImageTrend Elite.
+Routine A15 **v0.2.2** provides a tabbed, reviewed workflow for ImageTrend Elite.
 
 [Install the A15 userscript](https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-helper.user.js) in Tampermonkey, then refresh ImageTrend. Install the full script so its warning artwork resource is included.
 
@@ -24,3 +24,7 @@ With Node.js and Microsoft Edge installed, run `npm install`, `npm test`, and `n
 ## Updates
 
 v0.2.1 adds explicit update and download URLs pointing at a15-mvp. Install this version once if your existing installation has a missing or stale update address. Future Tampermonkey update checks use that branch. After updating, refresh ImageTrend to load the new version. Chart behavior is unchanged from v0.2.0.
+
+## v0.2.2
+
+Large Review whole chart and Go, baby, go controls, with a scrolling review list and Recon under Log & testing. Dropdowns wait for late options and support the selected-item opener. Missing options receive one retry after other approved fields; ambiguous or changed values stay for attention. Section navigation rechecks for a child after expanding a header. Delay targets now match the supplied menu choices exactly. Full dispatch-baseline reset remains deferred; current Clear behavior is unchanged. Live verification is still required.

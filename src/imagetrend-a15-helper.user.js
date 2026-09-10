@@ -3,7 +3,7 @@
 // @namespace    local.imagetrend.workflow
 // @updateURL    https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-helper.user.js
 // @downloadURL  https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-helper.user.js
-// @version      0.2.1
+// @version      0.2.2
 // @description  Review/apply vetted routine A15 ImageTrend defaults on the currently open form view. Never saves/submits.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        GM_getResourceURL
@@ -113,7 +113,7 @@
     return false;
   }
   async function expose(c) {
-    const s = c.querySelector('button.koSingleselect-down-button');
+    const s = c.querySelector('button.koSingleselect-down-button,.koSingleselect-selectedItem[data-bind*="toggleDropDown"],.koSingleselect-placeholder[data-bind*="toggleDropDown"]');
     if (s && !s.disabled) { s.click(); await sleep(120); return; }
     const ms = c.querySelector('.koMultiselect-searchbar-input');
     if (ms && !ms.disabled) { ms.focus(); ms.click(); await sleep(120); return; }
@@ -125,7 +125,11 @@
     if (!unchanged(readField(el), before)) throw new Error('Field changed since review.');
     if (target === 'Not Applicable') { await setSpecialChoice(el,target,before); return; }
     let nodes = optionNodes(c, target);
-    if (!nodes.some(visible)) { await expose(c); nodes = optionNodes(c, target); }
+    if (!nodes.some(visible)) {
+      await expose(c);
+      const deadline=Date.now()+1800;
+      do { nodes=optionNodes(c,target); if(nodes.some(visible))break; await sleep(100); } while(Date.now()<deadline&&el.isConnected);
+    }
     const usable = [...new Set(nodes.filter(visible).map(n => clickable(n, c)).filter(Boolean).filter(visible))];
     if (usable.length !== 1) throw new Error(`Choice "${target}" missing or ambiguous.`);
     const node = usable[0];
@@ -631,7 +635,7 @@
       };
       out.push({id:el.id,element:el,label,target:Array.isArray(target)?target.map(canonical):canonical(target),mode:'fillBlank',derived,delay:true});
     };
-    push('Transport Delay','None','Routine transport default');
+    push('Transport Delay','None/No Delay','Routine transport default');
     const response=delayField('Response'), destination=delayField('Destination');
     if(!response&&!destination)return out;
     const duration=(a,b)=>{
@@ -640,8 +644,8 @@
       if(end<start)throw new Error('Delay timeline is out of order.');
       return (end-start)/1000;
     };
-    if(response&&duration('29331','29332')>120)push('Response Delay','Staff delay','Unit Notified by Dispatch → Unit En Route > 120 seconds');
-    if(destination&&duration('29338','29342')>1200)push('Destination Delay',['Documentation','ED crowding/transfer of care'],'Destination → Unit Back in Service > 20 minutes');
+    if(response&&duration('29331','29332')>120)push('Response Delay','Staff Delay','Unit Notified by Dispatch → Unit En Route > 120 seconds');
+    if(destination&&duration('29338','29342')>1200)push('Destination Delay',['Documentation','ED Overcrowding / Transfer of Care'],'Destination → Unit Back in Service > 20 minutes');
     return out; // Scene delays are always manual.
   }
   function namedGrid(name) {
@@ -729,6 +733,12 @@
     }
     if(!action)throw new Error('Navigation to '+name+' unavailable.');
     action.click();
+    await sleep(200);
+    if(panelName()!==name){
+      // Section headers expand a group; its child opens the actual panel.
+      const child=textAction(nav,name);
+      if(child&&child!==action){child.click();}
+    }
     await until(()=>panelName()===name,'Could not open '+name+'.');
   }
   const VITAL_IDS=new Set(RULES.slice(RULES.findIndex(r=>r.label==='AVPU'),RULES.findIndex(r=>r.label==="Procedure Performed Prior to this Unit's EMS Care")).map(r=>r.id));
@@ -845,32 +855,32 @@
   host.style.cssText='position:fixed;right:16px;top:60px;z-index:2147483645';
   const root=host.attachShadow({mode:'open'});
   root.innerHTML='<style>'+
-    ':host{font:13px/1.4 system-ui;color:#182a3d}*{box-sizing:border-box}button{font:inherit;cursor:pointer;padding:8px 11px;border:1px solid #a7b4c0;border-radius:7px;background:#fff;color:#182a3d}button:disabled{opacity:.48;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #2878b7;outline-offset:2px}#launch,#run{background:#165c88;color:white}section{width:430px;min-width:350px;max-width:94vw;max-height:83vh;overflow:auto;resize:horizontal;background:#fff;border:1px solid #a7b4c0;border-radius:12px;padding:14px;box-shadow:0 10px 30px #0004}header{display:flex;align-items:center;gap:8px;cursor:move}h2{font-size:17px;margin:0;flex:1}small,.meta{font-size:11px;color:#586b7a}nav{display:flex;gap:4px;margin:12px 0;flex-wrap:wrap}nav button{font-size:12px;padding:5px 8px}nav button[aria-selected=true]{background:#183f5b;color:white}.actions{display:flex;align-items:stretch;gap:7px;margin:10px 0}#scan{flex:1;font-weight:700;font-size:15px;padding:12px}#timeline{margin-left:auto;min-width:110px}button[data-state=pending]{background:#ffdf80;color:#49370c}button[data-state=ready]{background:#bde6c7;color:#154424}button[data-state=error]{background:#f6b9b9;color:#721a1a}.row{display:flex;gap:8px;border-top:1px solid #e4e9ed;padding:9px 0}.row input{margin-top:4px}.ready{color:#195a30}.conflict,.manual{color:#8a5400}.blocked{color:#9c2323}#status{padding:9px;background:#edf3f7;border-radius:6px;margin:8px 0}#status[data-error=true]{background:#fce2df;color:#84221a}#log{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.5 ui-monospace,monospace;max-height:190px;overflow:auto;background:#f3f5f7;padding:8px}details{margin-top:12px}summary{cursor:pointer;font-weight:600}.danger{background:#b6252b;color:white;border-color:#a51c23}.footer{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.modal{position:fixed;inset:0;background:#071524ba;display:flex;align-items:center;justify-content:center;z-index:2147483647}.dialog{width:420px;max-width:92vw;max-height:88vh;overflow:auto;background:#fff6dc;border:3px solid #193d55;border-radius:16px;padding:18px;box-shadow:0 12px 50px #0008}.art{height:195px;overflow:hidden;margin:-18px -18px 15px;background:#193d55}.art img{width:100%;display:block;transform:translateY(-26px)}.dialog h3{font-size:20px;margin:8px 0}.dialog .footer{justify-content:space-between}.dialog button{font-size:15px;font-weight:700}#clearlist{max-height:260px;overflow:auto}[hidden]{display:none!important}'+
-    '</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.2.1</small></h2><button id="hide">Minimize</button></header>'+
+    ':host{font:13px/1.4 system-ui;color:#182a3d}*{box-sizing:border-box}button{font:inherit;cursor:pointer;padding:8px 11px;border:1px solid #a7b4c0;border-radius:7px;background:#fff;color:#182a3d}button:disabled{opacity:.48;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #2878b7;outline-offset:2px}#launch,#run{background:#165c88;color:white}section{display:flex;flex-direction:column;width:430px;min-width:350px;max-width:94vw;max-height:83vh;overflow:hidden;resize:horizontal;background:#fff;border:1px solid #a7b4c0;border-radius:12px;padding:14px;box-shadow:0 10px 30px #0004}header{display:flex;align-items:center;gap:8px;cursor:move}h2{font-size:17px;margin:0;flex:1}small,.meta{font-size:11px;color:#586b7a}nav{display:flex;gap:4px;margin:12px 0;flex-wrap:wrap}nav button{font-size:12px;padding:5px 8px}nav button[aria-selected=true]{background:#183f5b;color:white}.actions{display:flex;align-items:stretch;gap:7px;margin:10px 0}#whole{flex:1;font-weight:700;font-size:15px;padding:12px}#timeline{margin-left:auto;min-width:110px}button[data-state=pending]{background:#ffdf80;color:#49370c}button[data-state=ready]{background:#bde6c7;color:#154424}button[data-state=error]{background:#f6b9b9;color:#721a1a}.row{display:flex;gap:8px;border-top:1px solid #e4e9ed;padding:9px 0}.row input{margin-top:4px}.ready{color:#195a30}.conflict,.manual{color:#8a5400}.blocked{color:#9c2323}#status{padding:9px;background:#edf3f7;border-radius:6px;margin:8px 0}#status[data-error=true]{background:#fce2df;color:#84221a}#log{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.5 ui-monospace,monospace;max-height:190px;overflow:auto;background:#f3f5f7;padding:8px}details{margin-top:12px}summary{cursor:pointer;font-weight:600}.danger{background:#b6252b;color:white;border-color:#a51c23}.footer{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.modal{position:fixed;inset:0;background:#071524ba;display:flex;align-items:center;justify-content:center;z-index:2147483647}.dialog{width:420px;max-width:92vw;max-height:88vh;overflow:auto;background:#fff6dc;border:3px solid #193d55;border-radius:16px;padding:18px;box-shadow:0 12px 50px #0008}.art{height:195px;overflow:hidden;margin:-18px -18px 15px;background:#193d55}.art img{width:100%;display:block;transform:translateY(-26px)}.dialog h3{font-size:20px;margin:8px 0}.dialog .footer{justify-content:space-between}.dialog button{font-size:15px;font-weight:700}#rows{overflow:auto;min-height:0;flex:1}header,nav,.actions,#acklabel,#status,#context,section>details,section>p{flex-shrink:0}#clearlist{max-height:260px;overflow:auto}[hidden]{display:none!important}'+
+    '</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.2.2</small></h2><button id="hide">Minimize</button></header>'+
     '<nav aria-label="Helper sections"></nav><div id="context" class="meta"></div>'+
-    '<div class="actions"><button id="scan" data-state="pending">Scan this view</button><button id="timeline" data-state="pending">Read timeline</button></div>'+
-    '<button id="whole">Review whole chart</button><div id="status" role="status">Choose Routine A15, then review the proposed changes.</div>'+
+    '<div class="actions"><button id="whole" data-state="pending">Review whole chart</button><button id="timeline" data-state="pending">Read timeline</button></div>'+
+    '<button id="scan" data-state="pending">Scan this view</button><div id="status" role="status">Choose Routine A15, then review the proposed changes.</div>'+
     '<div id="rows"></div><label id="acklabel"><input id="ack" type="checkbox"> These selections match the care provided. I reviewed the changes.</label>'+
-    '<div class="actions"><button id="run" disabled>Apply selected changes</button></div>'+
+    '<div class="actions"><button id="run" disabled>Go, baby, go</button></div>'+
     '<div id="cleararea" hidden><p>Clear selected values added by this helper since this page loaded. Existing answers and measured vital values are excluded. Open the relevant entry to make its fields available.</p><div id="clearlist"></div><button id="clearvalues" class="danger" disabled>Clear selected values</button></div>'+
-    '<details><summary>Log &amp; testing</summary><div class="footer"><button id="clearlog">Clear log</button><button id="resettest">Reset procedure test</button></div><div id="log"></div></details>'+
+    '<details><summary>Log &amp; testing</summary><div class="footer"><button id="reconlink" hidden>Recon this view</button><button id="clearlog">Clear log</button><button id="resettest">Reset procedure test</button></div><div id="log"></div></details>'+
     '<p class="meta">Chart Save/submit is never clicked. Missing controls and conflicts stay for review.</p></section>'+
     '<div id="confirm" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="confirmtitle"><div class="dialog"><div class="art"><img id="artwork" alt="Retro vault mascot giving a thumbs-up beside a cartoon mushroom cloud"></div><h3 id="confirmtitle">Clear selected data?</h3><p>This will nuke the selected chart data. You good with that?</p><p id="clearsummary"></p><div class="footer"><button id="cancelclear">Cancel</button><button id="yesclear" class="danger">Yes, clear it</button></div></div></div>';
   document.body.append(host);
   const $=s=>root.querySelector(s);
   let plan=[],busy=false,planKey='',tab=sectionKind(),lastPanel=panelName(),lastChart=timelineChartKey();
-  let timelineState='pending', scanState='pending', clearSelection=[],confirmResolve=null;
+  let wholeState='pending', timelineState='pending', scanState='pending', clearSelection=[],confirmResolve=null;
   const tabs=['Chart','Treatment','Vitals','Transport','Delays','Clear'];
   const log=t=>{const el=$('#log');el.textContent+=t+'\n';el.scrollTop=el.scrollHeight;};
   function status(text,error=false){$('#status').textContent=text;$('#status').dataset.error=String(error);log(text);}
-  function invalidate(){plan=[];planKey='';scanState='pending';$('#rows').replaceChildren();$('#ack').checked=false;updateUI();}
+  function invalidate(){wholeState='pending';plan=[];planKey='';scanState='pending';$('#rows').replaceChildren();$('#ack').checked=false;updateUI();}
   function updateUI(){
-    $('#scan').dataset.state=scanState;$('#timeline').dataset.state=timelineState;
+    $('#whole').dataset.state=wholeState;$('#scan').dataset.state=scanState;$('#timeline').dataset.state=timelineState;
     $('#timeline').textContent=timelineState==='ready'?'Timeline ready':timelineState==='error'?'Timeline error':'Read timeline';
     $('#context').textContent=(panelName()||'Current chart')+' · '+tab;
     $('#cleararea').hidden=tab!=='Clear';
     $('#scan').hidden=tab==='Clear';$('#rows').hidden=tab==='Clear';$('#acklabel').hidden=tab==='Clear';$('#run').hidden=tab==='Clear';
-    $('#whole').hidden=tab!=='Chart';
+    $('#whole').hidden=tab==='Clear';
     for(const b of root.querySelectorAll('nav button')){b.setAttribute('aria-selected',String(b.textContent===tab));b.disabled=busy;}
     for(const id of ['scan','timeline','whole','resettest','ack'])$('#'+id).disabled=busy;
     $('#run').disabled=busy||!$('#ack').checked||!plan.some(x=>x.selected&&x.status==='ready');
@@ -969,13 +979,13 @@
       }catch(e){all.push({rule:{label:section,target:'manual review'},section,status:'blocked',note:e.message});}
     }
     if(origin)try{await ensureSection(origin);}catch(e){log(e.message);}
-    plan=all;planKey=timelineChartKey();tab='Chart';render();status('Chart review ready. Unavailable sections are listed for attention; no values have been applied.');
+    plan=all;planKey=timelineChartKey();tab='Chart';wholeState='ready';render();status('Chart review ready. Unavailable sections are listed for attention; no values have been applied.');
   }
   async function applyPlan(){
     if(planKey!==timelineChartKey())throw new Error('Chart changed. Scan again.');
     const selected=plan.filter(x=>x.selected&&x.status==='ready'), origin=panelName();
-    let count=0;
-    for(const item of selected){
+    let count=0;const waiting=[];
+    const attempt=async item=>{
       if(planKey!==timelineChartKey())throw new Error('Chart changed during apply.');
       if(item.section&&panelName()!==item.section)await ensureSection(item.section);
       if(item.kind==='bundle'){
@@ -988,16 +998,36 @@
         if(!el)throw new Error('Reviewed field disappeared: '+item.rule.label);
         await apply({...item,el});
       }
-      count++;item.status='kept';item.selected=false;
+      count++;item.status='kept';item.selected=false;item.note='Applied and verified';
+      status('Applied '+count+' of '+selected.length+' reviewed actions.');
+    };
+    for(const item of selected){
+      try{await attempt(item);}
+      catch(e){
+        if(planKey!==timelineChartKey())throw e;
+        item.note=e.message;log((item.rule?.label||item.kind)+': '+e.message);
+        // Retry only absent options, never partial procedure/grid writes or ambiguous choices.
+        if(!item.kind&&!item.rule.action&&/^Choice .* missing or ambiguous/.test(e.message)&&optionNodes(containerOf(oneVisibleById(item.rule.id)||document.createElement('div')),item.rule.target).filter(visible).length===0){waiting.push(item);item.note='Waiting for available options; will retry after approved fields.';}
+        else {item.status='blocked';item.selected=false;}
+        if([...document.querySelectorAll('.grid-flyout-active')].some(visible))break;
+      }
     }
+    for(const item of waiting){try{await attempt(item);}catch(e){if(planKey!==timelineChartKey())throw e;item.status='blocked';item.selected=false;item.note='Needs attention: '+e.message;}}
     if(origin&&panelName()!==origin)try{await ensureSection(origin);}catch(e){log(e.message);}
-    invalidate();status('Applied '+count+' reviewed actions. Inspect the chart before saving.');
+    render();status('Applied '+count+' reviewed actions; '+plan.filter(x=>x.status==='blocked').length+' need attention. Review results before saving.');
   }
   $('#scan').onclick=()=>task(async()=>{try{await scanCurrent();}catch(e){scanState='error';throw e;}});
-  $('#whole').onclick=()=>task(scanWhole);
+  $('#whole').onclick=()=>task(async()=>{try{await scanWhole();}catch(e){wholeState='error';throw e;}});
   $('#timeline').onclick=()=>task(async()=>{invalidate();await prepareTimeline(true);status('Timeline read and previous view restored. Ready for review.');});
   $('#ack').onchange=updateUI;
   $('#run').onclick=()=>{if($('#ack').checked)task(applyPlan);};
+  function dockRecon(){
+    const legacy=document.getElementById('it-field-recon-host'),button=legacy?.shadowRoot?.querySelector('#recon');
+    if(!button)return;
+    legacy.style.display='none';$('#reconlink').hidden=false;
+    $('#reconlink').onclick=()=>button.click();
+  }
+  dockRecon();
   $('#clearlog').onclick=()=>{$('#log').textContent='';};
   $('#resettest').onclick=()=>{
     if(busy)return;
@@ -1045,13 +1075,14 @@
   document.addEventListener('change',e=>{if(!busy&&!e.composedPath().includes(host))invalidate();},true);
   setInterval(()=>{
     if(busy)return;
+    dockRecon();
     const current=panelName(), chart=timelineChartKey();
     if(chart!==lastChart||current!==lastPanel){
       lastChart=chart;lastPanel=current;tab=sectionKind();invalidate();
       if(chart!==planKey)$('#clearlist').replaceChildren();
     }
     if(!timelineSnapshot||Date.now()-timelineSnapshot.captured>15*60000){if(timelineState==='ready')timelineState='pending';}
-    if(plan.some(x=>x.el&&(!x.el.isConnected||!unchanged(readField(x.el),x.before))))invalidate();
+    if(plan.some(x=>x.status==='ready'&&x.el&&(!x.el.isConnected||!unchanged(readField(x.el),x.before))))invalidate();
     updateUI();
   },700);
   updateUI();
