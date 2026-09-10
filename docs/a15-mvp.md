@@ -36,11 +36,12 @@ Fill blank routine fields only:
 - Number transported: `1`
 - EMS Transport Method: `Ground-Ambulance`
 - Transport Mode from Scene: `Without Lights and Sirens`
-- Transport from Scene Type: `No Lights or Sirens`
+- Transport from Scene Type: `Initial Lights and Sirens, Downgraded to No Lights or Sirens`
 - Moved to ambulance: `Stretcher`
 - Patient Secured By: `Cot- 5 straps, Including Shoulders`
 - Position: `Semi-Fowlers`
 - Moved from ambulance: `Stretcher`
+- Final Patient Acuity: `Lower Acuity (Green)`
 - Accepting Hospital Notified: `Yes`
 - Facility Notified By: `Phone`
 - Destination Team Pre-Arrival Alert or Activation: `No`
@@ -48,7 +49,13 @@ Fill blank routine fields only:
 
 Receiving Hospital Contacted Date/Time is derived as Destination Arrival minus five minutes only when the result is not earlier than Unit Left Scene and the contact fields are blank.
 
-Final Patient Acuity, closest-facility logic, distant-facility reason, destination name/address, and other destination details remain untouched.
+Closest-facility logic, distant-facility reason, destination name/address, and other destination details remain untouched.
+
+### ImageTrend multiselect behavior confirmed during transport test
+
+The rendered selected value uses `.koMultiselect-selectedItem-value` with bindings such as `getSelectedItemDisplay($data)`. Dropdown options can expose their exact text through elements bound with `getOptionDisplay($data)`. The A15 helper v0.1.1 now uses those exact leaf nodes so one selected item is not misread as multiple duplicate values.
+
+Confirmed transport selected values include `Stretcher`, `Cot- 5 straps, Including Shoulders`, `Semi-Fowlers`, and `Stretcher` for movement from the ambulance.
 
 ### Vitals metadata
 
@@ -85,7 +92,7 @@ For an already-open procedure entry:
 - `Stroke Assessment` comments -> `FAST`
 - `Moving a patient to a stretcher` comments -> `Stand, pivot, sit`
 
-## Intentionally not in v0.1.0
+## Intentionally not in v0.1.1
 
 - Creating the procedure bundle automatically.
 - Applying Patient Arrival / Destination Arrival procedure timestamps automatically.
