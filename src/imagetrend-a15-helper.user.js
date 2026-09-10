@@ -3,7 +3,7 @@
 // @namespace    local.imagetrend.workflow
 // @updateURL    https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-helper.user.js
 // @downloadURL  https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-helper.user.js
-// @version      0.2.2
+// @version      0.2.3
 // @description  Review/apply vetted routine A15 ImageTrend defaults on the currently open form view. Never saves/submits.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        GM_getResourceURL
@@ -855,12 +855,12 @@
   host.style.cssText='position:fixed;right:16px;top:60px;z-index:2147483645';
   const root=host.attachShadow({mode:'open'});
   root.innerHTML='<style>'+
-    ':host{font:13px/1.4 system-ui;color:#182a3d}*{box-sizing:border-box}button{font:inherit;cursor:pointer;padding:8px 11px;border:1px solid #a7b4c0;border-radius:7px;background:#fff;color:#182a3d}button:disabled{opacity:.48;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #2878b7;outline-offset:2px}#launch,#run{background:#165c88;color:white}section{display:flex;flex-direction:column;width:430px;min-width:350px;max-width:94vw;max-height:83vh;overflow:hidden;resize:horizontal;background:#fff;border:1px solid #a7b4c0;border-radius:12px;padding:14px;box-shadow:0 10px 30px #0004}header{display:flex;align-items:center;gap:8px;cursor:move}h2{font-size:17px;margin:0;flex:1}small,.meta{font-size:11px;color:#586b7a}nav{display:flex;gap:4px;margin:12px 0;flex-wrap:wrap}nav button{font-size:12px;padding:5px 8px}nav button[aria-selected=true]{background:#183f5b;color:white}.actions{display:flex;align-items:stretch;gap:7px;margin:10px 0}#whole{flex:1;font-weight:700;font-size:15px;padding:12px}#timeline{margin-left:auto;min-width:110px}button[data-state=pending]{background:#ffdf80;color:#49370c}button[data-state=ready]{background:#bde6c7;color:#154424}button[data-state=error]{background:#f6b9b9;color:#721a1a}.row{display:flex;gap:8px;border-top:1px solid #e4e9ed;padding:9px 0}.row input{margin-top:4px}.ready{color:#195a30}.conflict,.manual{color:#8a5400}.blocked{color:#9c2323}#status{padding:9px;background:#edf3f7;border-radius:6px;margin:8px 0}#status[data-error=true]{background:#fce2df;color:#84221a}#log{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.5 ui-monospace,monospace;max-height:190px;overflow:auto;background:#f3f5f7;padding:8px}details{margin-top:12px}summary{cursor:pointer;font-weight:600}.danger{background:#b6252b;color:white;border-color:#a51c23}.footer{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.modal{position:fixed;inset:0;background:#071524ba;display:flex;align-items:center;justify-content:center;z-index:2147483647}.dialog{width:420px;max-width:92vw;max-height:88vh;overflow:auto;background:#fff6dc;border:3px solid #193d55;border-radius:16px;padding:18px;box-shadow:0 12px 50px #0008}.art{height:195px;overflow:hidden;margin:-18px -18px 15px;background:#193d55}.art img{width:100%;display:block;transform:translateY(-26px)}.dialog h3{font-size:20px;margin:8px 0}.dialog .footer{justify-content:space-between}.dialog button{font-size:15px;font-weight:700}#rows{overflow:auto;min-height:0;flex:1}header,nav,.actions,#acklabel,#status,#context,section>details,section>p{flex-shrink:0}#clearlist{max-height:260px;overflow:auto}[hidden]{display:none!important}'+
-    '</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.2.2</small></h2><button id="hide">Minimize</button></header>'+
+    ':host{font:13px/1.4 system-ui;color:#182a3d}*{box-sizing:border-box}button{font:inherit;cursor:pointer;padding:8px 11px;border:1px solid #a7b4c0;border-radius:7px;background:#fff;color:#182a3d}button:disabled{opacity:.48;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #2878b7;outline-offset:2px}#launch,#run{background:#165c88;color:white}section{display:flex;flex-direction:column;width:430px;min-width:350px;max-width:94vw;max-height:83vh;overflow:hidden;resize:horizontal;background:#fff;border:1px solid #a7b4c0;border-radius:12px;padding:14px;box-shadow:0 10px 30px #0004}header{display:flex;align-items:center;gap:8px;cursor:move}h2{font-size:17px;margin:0;flex:1}small,.meta{font-size:11px;color:#586b7a}nav{display:flex;gap:4px;margin:12px 0;flex-wrap:wrap}nav button{font-size:12px;padding:5px 8px}nav button[aria-selected=true]{background:#183f5b;color:white}.actions{display:flex;align-items:stretch;gap:7px;margin:10px 0}#whole{flex:1;font-weight:700;font-size:15px;padding:12px}#timeline{margin-left:auto;min-width:110px}button[data-state=pending]{background:#ffdf80;color:#49370c}button[data-state=ready]{background:#bde6c7;color:#154424}button[data-state=error]{background:#f6b9b9;color:#721a1a}.row{display:flex;gap:8px;border-top:1px solid #e4e9ed;padding:9px 0}.row input{margin-top:4px}.ready{color:#195a30}.conflict,.manual{color:#8a5400}.blocked{color:#9c2323}#status{padding:9px;background:#edf3f7;border-radius:6px;margin:8px 0}#status[data-error=true]{background:#fce2df;color:#84221a}#log{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.5 ui-monospace,monospace;max-height:190px;overflow:auto;background:#f3f5f7;padding:8px}details{margin-top:12px}summary{cursor:pointer;font-weight:600}.danger{background:#b6252b;color:white;border-color:#a51c23}.footer{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.modal{position:fixed;inset:0;background:#071524ba;display:flex;align-items:center;justify-content:center;z-index:2147483647}.dialog{width:420px;max-width:92vw;max-height:88vh;overflow:auto;background:#fff6dc;border:3px solid #193d55;border-radius:16px;padding:18px;box-shadow:0 12px 50px #0008}.art{height:195px;overflow:hidden;margin:-18px -18px 15px;background:#193d55}.art img{width:100%;display:block;transform:translateY(-26px)}.dialog h3{font-size:20px;margin:8px 0}.dialog .footer{justify-content:space-between}.dialog button{font-size:15px;font-weight:700}#issues{max-height:150px;overflow:auto}.issue{padding:7px;background:#fff4d5;border-radius:6px;margin:5px 0}.issue a{color:#165c88;text-decoration:underline;font-weight:600}#rows{overflow:auto;min-height:0;flex:1}header,nav,.actions,#acklabel,#status,#context,section>details,section>p{flex-shrink:0}#clearlist{max-height:260px;overflow:auto}[hidden]{display:none!important}'+
+    '</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.2.3</small></h2><button id="hide">Minimize</button></header>'+
     '<nav aria-label="Helper sections"></nav><div id="context" class="meta"></div>'+
     '<div class="actions"><button id="whole" data-state="pending">Review whole chart</button><button id="timeline" data-state="pending">Read timeline</button></div>'+
     '<button id="scan" data-state="pending">Scan this view</button><div id="status" role="status">Choose Routine A15, then review the proposed changes.</div>'+
-    '<div id="rows"></div><label id="acklabel"><input id="ack" type="checkbox"> These selections match the care provided. I reviewed the changes.</label>'+
+    '<details id="attention" hidden open><summary>Needs attention</summary><div id="issues"></div></details><div id="rows"></div><label id="acklabel"><input id="ack" type="checkbox"> These selections match the care provided. I reviewed the changes.</label>'+
     '<div class="actions"><button id="run" disabled>Go, baby, go</button></div>'+
     '<div id="cleararea" hidden><p>Clear selected values added by this helper since this page loaded. Existing answers and measured vital values are excluded. Open the relevant entry to make its fields available.</p><div id="clearlist"></div><button id="clearvalues" class="danger" disabled>Clear selected values</button></div>'+
     '<details><summary>Log &amp; testing</summary><div class="footer"><button id="reconlink" hidden>Recon this view</button><button id="clearlog">Clear log</button><button id="resettest">Reset procedure test</button></div><div id="log"></div></details>'+
@@ -893,6 +893,34 @@
     const body=document.createElement('div'), title=document.createElement('div'),meta=document.createElement('div');
     title.className=state;title.textContent=label;meta.className='meta';meta.textContent=detail;body.append(title,meta);div.append(cb,body);scope.append(div);
   }
+  const issues=[];
+  function addIssue(item,message){
+    const key=timelineChartKey(), id=item.rule?.id||item.section||item.kind||'general';
+    const prior=issues.find(x=>x.key===key&&x.id===id);
+    const issue={key,id,section:item.section||panelName(),fieldId:item.rule?.id,label:item.rule?.label||item.kind||'Chart review',message};
+    if(prior)Object.assign(prior,issue);else issues.push(issue);
+    renderIssues();
+  }
+  function renderIssues(){
+    const list=$('#issues');list.replaceChildren();
+    const current=issues.filter(x=>x.key===timelineChartKey());
+    $('#attention').hidden=!current.length;
+    $('#attention summary').textContent='Needs attention ('+current.length+')';
+    for(const issue of current){
+      const div=document.createElement('div');div.className='issue';
+      const link=document.createElement('a');link.href='#';link.textContent=issue.label+' — open field';
+      link.onclick=e=>{e.preventDefault();task(async()=>{
+        if(issue.key!==timelineChartKey())throw new Error('This issue belongs to another chart.');
+        if(issue.section&&panelName()!==issue.section)await ensureSection(issue.section);
+        const field=issue.fieldId?oneVisibleById(issue.fieldId):document.querySelector('#panel-header');
+        if(!field){status('Opened '+issue.section+'. The field is not currently visible; check prerequisites.',false);return;}
+        field.scrollIntoView({block:'center',behavior:'smooth'});
+        const old=field.style.outline;field.style.outline='3px solid #d89200';setTimeout(()=>field.style.outline=old,5000);
+        status('Review '+issue.label+'. '+issue.message,false);
+      });};
+      const detail=document.createElement('div');detail.textContent=issue.message;div.append(link,detail);list.append(div);
+    }
+  }
   function render(){
     $('#rows').replaceChildren();
     for(const item of plan){
@@ -906,6 +934,8 @@
         meta.textContent=child.rule.label+': '+(listValue(child.before).join(', ')||'(blank)')+' → '+child.rule.target+' ['+child.status+']';$('#rows').append(meta);
       }
     }
+    for(const item of plan.filter(x=>['blocked','conflict','manual'].includes(x.status)))addIssue(item,item.note||'Existing value needs your review.');
+    renderIssues();
     scanState='ready';$('#ack').checked=false;updateUI();
   }
   function refreshClear(){
@@ -931,7 +961,7 @@
     if(busy)return;
     busy=true;updateUI();
     try{await fn();}
-    catch(e){status(e.message,true);}
+    catch(e){addIssue({section:panelName(),rule:{label:'Review interrupted'}},e.message);status('Some work needs your attention. Use the links below to review it.',false);}
     finally{busy=false;lastPanel=panelName();lastChart=timelineChartKey();updateUI();}
   }
   async function prepareTimeline(force=false) {
@@ -1009,7 +1039,7 @@
         // Retry only absent options, never partial procedure/grid writes or ambiguous choices.
         if(!item.kind&&!item.rule.action&&/^Choice .* missing or ambiguous/.test(e.message)&&optionNodes(containerOf(oneVisibleById(item.rule.id)||document.createElement('div')),item.rule.target).filter(visible).length===0){waiting.push(item);item.note='Waiting for available options; will retry after approved fields.';}
         else {item.status='blocked';item.selected=false;}
-        if([...document.querySelectorAll('.grid-flyout-active')].some(visible))break;
+        if([...document.querySelectorAll('.grid-flyout-active')].some(visible)){for(const pending of selected.slice(selected.indexOf(item)+1)){pending.status='blocked';pending.selected=false;pending.note='Not attempted: review and close the open entry first.';}break;}
       }
     }
     for(const item of waiting){try{await attempt(item);}catch(e){if(planKey!==timelineChartKey())throw e;item.status='blocked';item.selected=false;item.note='Needs attention: '+e.message;}}
@@ -1028,7 +1058,7 @@
     $('#reconlink').onclick=()=>button.click();
   }
   dockRecon();
-  $('#clearlog').onclick=()=>{$('#log').textContent='';};
+  $('#clearlog').onclick=()=>{$('#log').textContent='';for(let i=issues.length-1;i>=0;i--)if(issues[i].key===timelineChartKey())issues.splice(i,1);renderIssues();};
   $('#resettest').onclick=()=>{
     if(busy)return;
     if(!timelineChartKey())return;
@@ -1078,7 +1108,7 @@
     dockRecon();
     const current=panelName(), chart=timelineChartKey();
     if(chart!==lastChart||current!==lastPanel){
-      lastChart=chart;lastPanel=current;tab=sectionKind();invalidate();
+      lastChart=chart;lastPanel=current;tab=sectionKind();invalidate();renderIssues();
       if(chart!==planKey)$('#clearlist').replaceChildren();
     }
     if(!timelineSnapshot||Date.now()-timelineSnapshot.captured>15*60000){if(timelineState==='ready')timelineState='pending';}
