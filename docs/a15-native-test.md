@@ -22,3 +22,8 @@ Uses captured paths to enumerate all existing vital entries and the four recogni
 
 Tests cover two vital entries, replacement AVPU and GCS, nested GCS qualifiers, recognized procedure role correction, unrelated procedure preservation, reordering, removal, protected blood pressure, and repeat prevention. Earlier versions' blanket repeated-entry exclusion is superseded by this section.
 
+
+## 0.2.4.5 single profile UI
+
+Removed the field dropdown. Profile: A15 is fixed and Preview A15 changes reviews the full supported profile. STEMI, CVA and trauma are future profiles, not currently selectable.
+
