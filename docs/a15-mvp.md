@@ -92,7 +92,7 @@ For an already-open procedure entry:
 - `Stroke Assessment` comments -> `FAST`
 - `Moving a patient to a stretcher` comments -> `Stand, pivot, sit`
 
-## Intentionally not in v0.1.1
+## Intentionally not in v0.1.2
 
 - Creating the procedure bundle automatically.
 - Applying Patient Arrival / Destination Arrival procedure timestamps automatically.
@@ -113,3 +113,13 @@ These are deferred until the A15 core is validated against real outstanding char
 6. Check the acknowledgement and apply reviewed fields.
 7. Manually verify every changed field before saving the chart.
 8. Record any missing control, wrong current-value detection, ambiguous choice, or ImageTrend UI behavior before expanding scope.
+
+## v0.1.2 option-click correction
+
+Blank multiselect snapshots are arrays. The old scalar target comparator rejected even an unchanged empty array before clicking. Snapshot equality now compares arrays separately from the single requested target.
+
+Options with `getOptionDisplay($data)` resolve to an explicit option row or an ancestor with a Knockout `click:` binding inside the same field. Arbitrary div/li fallback is removed. The adapter rejects missing, ambiguous, disabled, or mixed-content click targets, rechecks the snapshot immediately before clicking, and confirms the selected value after the click. It stops on timeout or chart detachment/navigation; it never invokes a view model directly.
+
+Validation: JavaScript syntax check and eight synthetic browser cases passed: bound ancestor with delayed selected-value update, generic container rejection, duplicate options, disabled ancestor, stale snapshot, no-op timeout, value change while opening, and role=option selection. Array snapshot checks also passed. Run the regression from the repository root with Playwright installed and Microsoft Edge available: `node tests/choice-adapter.cjs`.
+
+Live ImageTrend validation remains pending. Replace the installed script with v0.1.2, refresh, scan and review a blank transport multiselect, apply, and confirm the selected chip and the helper's confirmed-change log agree. Existing conflicting values must remain preserved.
