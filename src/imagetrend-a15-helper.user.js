@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ImageTrend A15 MVP helper
 // @namespace    local.imagetrend.workflow
-// @version      0.1.2
+// @version      0.1.3
 // @description  Review/apply vetted routine A15 ImageTrend defaults on the currently open form view. Never saves/submits.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        none
@@ -192,7 +192,7 @@
     {id:'25089',label:'Number of Pts Transported in this Unit',target:'1',input:true,mode:'fillBlank'},
     {id:'12e06449-632f-5f97-b454-ec747e814719',label:'EMS Transport Method',target:'Ground-Ambulance',mode:'fillBlank'},
     {id:'62dd5264-cd67-56ec-a3d3-f35e00818537',label:'Transport Mode from Scene',target:'Without Lights and Sirens',mode:'fillBlank'},
-    {id:'c05db124-d7cf-542c-a7bd-dbd12066f73d',label:'Transport from Scene Type',target:'Initial Lights and Sirens, Downgraded to No Lights or Sirens',mode:'fillBlank'},
+    {id:'c05db124-d7cf-542c-a7bd-dbd12066f73d',label:'Transport from Scene Type',target:'No Lights or Sirens',mode:'fillBlank'},
     {id:'0bf28da1-6fc8-5cb0-a49f-9541aef01cae',label:'How Pt Was Moved to Ambulance',target:'Stretcher',mode:'fillBlank'},
     {id:'fca2bbb8-e1de-56ec-973e-7f6f1a597a03',label:'Patient Secured By',target:'Cot- 5 straps, Including Shoulders',mode:'fillBlank'},
     {id:'fa166830-90f8-5671-8e1d-3e729c9779ec',label:'Position of Pt During Transport',target:'Semi-Fowlers',mode:'fillBlank'},
@@ -302,7 +302,7 @@
   const host=document.createElement('div');
   host.id='it-a15-helper-host'; host.style.cssText='position:fixed;right:16px;top:64px;z-index:2147483645';
   const root=host.attachShadow({mode:'open'});
-  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.2</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><p class="meta">No automatic Save/submit. Procedure creation/timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
+  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.3</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><p class="meta">No automatic Save/submit. Procedure creation/timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
   document.body.append(host);
   const $=s=>root.querySelector(s); let plan=[],busy=false,planUrl='';
   const log=t=>{$('#log').textContent+=`${t}\n`;};
