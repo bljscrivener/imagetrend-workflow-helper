@@ -149,3 +149,11 @@ Moving a patient to a stretcher now uses Unit Left Scene (29337Date/Time) minus 
 To repair the already-created stretcher entry, open it, Scan this view, review the proposed date/time and role corrections, then Apply reviewed fields. The original timestamp is shown in the plan and replaced only after review. Timeline changes since review invalidate the timing correction. Do not run Add four procedures again to repair existing entries.
 
 Validation: syntax and twelve synthetic browser scenarios passed, including role corrections on all four entries, ordinary and midnight timing, existing-entry repair, impossible chronology, missing role, and existing bundle failure guards. Live v0.1.5 validation remains pending.
+
+## v0.1.6 timeline retention
+
+Fixes the repeated unavailable 29337Date error: timeline fields are read across the document rather than restricted to #form-composer. Open Timeline, click the helper's Read timeline button, check the computed stretcher timestamp in the log, then return to Procedures. Values remain in memory for the same chart for up to 15 minutes while timeline controls are unmounted. Reloading clears this memory.
+
+Visible fields take precedence over hidden copies. Incomplete/ambiguous live fields, invalid times, chronology errors, observed timeline edits, chart changes, and expiration prevent stale fallback. Read timeline again after changing source times. No chart data is persisted to browser storage by this cache.
+
+Syntax check, seven timeline tests and twelve procedure regression scenarios passed. Tests cover fields outside the form, unmounted timeline reuse, chart isolation, edit invalidation, blank values clearing the cache, and expiry. Live v0.1.6 validation pending.
