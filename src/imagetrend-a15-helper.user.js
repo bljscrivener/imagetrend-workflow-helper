@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ImageTrend A15 MVP helper
 // @namespace    local.imagetrend.workflow
-// @version      0.1.7
+// @version      0.1.8
 // @description  Review/apply vetted routine A15 ImageTrend defaults on the currently open form view. Never saves/submits.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        none
@@ -428,15 +428,42 @@
     if (buttons.length !== 1 || disabledChoice(buttons[0], f)) throw new Error(label + ' unavailable or disabled.');
     return buttons[0];
   }
+
+  async function openProcedureEntry() {
+    const active = [...document.querySelectorAll('.grid-flyout-overlay.grid-flyout-active')].filter(visible);
+    if (active.length) return procedureFlyout();
+    const grids = [...document.querySelectorAll('[id="aa6d315f-ccbc-58c0-950e-2e0932ee67b6"]')].filter(visible);
+    if (grids.length !== 1) throw new Error('Open Treatment → Procedures & Medications first.');
+    const grid = grids[0];
+    if (norm(grid.querySelector('.grid-label')?.textContent) !== 'Procedures') throw new Error('Procedures grid identity did not match.');
+    const lists = grid.querySelectorAll('.grid-item-display');
+    if (lists.length !== 1 || lists[0].children.length || norm(lists[0].textContent))
+      throw new Error('Procedures already exist or list is unavailable. Open an existing entry to review; automatic Add requires an empty list.');
+    if ([...grid.querySelectorAll('button.grid-filter')].some(b => !b.classList.contains('grid-button-highlighted')))
+      throw new Error('Show all procedure filters before adding.');
+    const buttons = [...grid.querySelectorAll('.grid-actions button.grid-button')].filter(visible)
+      .filter(b => norm(b.textContent) === 'Add' && (b.getAttribute('data-bind') || '').includes('grid.openSubformSelectionModal($context)'));
+    if (buttons.length !== 1 || disabledChoice(buttons[0], grid)) throw new Error('Procedure Add unavailable or disabled.');
+    const url = location.href;
+    buttons[0].click();
+    const end = Date.now() + 5000;
+    while (Date.now() < end) {
+      if (location.href !== url) throw new Error('Chart changed while opening procedure.');
+      try { return procedureFlyout(); } catch (_) { /* wait for native flyout */ }
+      await sleep(100);
+    }
+    throw new Error('Procedure entry did not open. Review any ImageTrend dialog before continuing.');
+  }
+
   async function addProcedureBundle(onProgress) {
     const url = location.href;
     if (!/\/Incident\d+\/Form42(?:$|[/?])/.test(location.hash)) throw new Error('Open a Form42 chart.');
     const storageKey = 'it-a15-procedure-bundle:' + url;
     if (sessionStorage.getItem(storageKey)) throw new Error('Bundle already attempted in this tab. Review existing procedures before adding anything manually.');
-    let f = procedureFlyout();
+    const timing = stretcherTime();
+    let f = await openProcedureEntry();
     if (!blank(readField(procedureField(f)))) throw new Error('The open procedure is populated. Open a blank entry first.');
     procedureKey(f);
-    const timing = stretcherTime();
     procedureButton(f, 'addAnotherButtonClickHandler', 'Add Another');
     procedureButton(f, 'okButtonClickHandler', 'OK');
     // Persist before the first mutation: failed/partial runs must not be blindly repeated.
@@ -488,7 +515,7 @@
   const host=document.createElement('div');
   host.id='it-a15-helper-host'; host.style.cssText='position:fixed;right:16px;top:64px;z-index:2147483645';
   const root=host.attachShadow({mode:'open'});
-  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.7</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="timeline">Read timeline</button><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><hr><p><strong>Add four procedures</strong>: Assessment -ALS; Neurological assessment; Adult pain assessment; Moving a patient to a stretcher.</p><p class="meta">Start with a blank Procedure entry open. Uses Add Another and OK. Sets role to Paramedic on all four; stretcher time to Depart Scene minus 2 minutes; fallback Arrived on Scene plus 2 minutes. First open Timeline and click Read timeline; then return here. Review other times and clinical details afterward.</p><label><input id="procack" type="checkbox"> These four procedures were performed, are missing from this chart, and I want to add them with Paramedic role and the stated stretcher time.</label><p><button id="procrun" disabled>Add four procedures</button></p><p class="meta">No automatic chart Save/submit. Procedure timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
+  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.8</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="timeline">Read timeline</button><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><hr><p><strong>Add four procedures</strong>: Assessment -ALS; Neurological assessment; Adult pain assessment; Moving a patient to a stretcher.</p><p class="meta">Start on Procedures &amp; Medications with an empty procedure list, or a blank Procedure entry. Opens Add automatically, then uses Add Another and OK. Sets role to Paramedic on all four; stretcher time to Depart Scene minus 2 minutes; fallback Arrived on Scene plus 2 minutes. First open Timeline and click Read timeline; then return here. Review other times and clinical details afterward.</p><label><input id="procack" type="checkbox"> These four procedures were performed, are missing from this chart, and I want to add them with Paramedic role and the stated stretcher time.</label><p><button id="procrun" disabled>Add four procedures</button></p><p class="meta">No automatic chart Save/submit. Procedure timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
   document.body.append(host);
   const $=s=>root.querySelector(s); let plan=[],busy=false,planUrl='';
   const log=t=>{$('#log').textContent+=`${t}\n`;};
