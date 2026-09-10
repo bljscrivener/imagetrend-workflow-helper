@@ -1,6 +1,6 @@
-# Gremlin Logic A15 Native Test
+# Gremlin Logic A15
 
-Current release: **0.2.4.9**. See [current release notes](../RELEASE-0.2.4.9.md) for installation, supported workflows, local snapshot retention, bounded auto-healing and validation limits. Historical notes below describe earlier versions; current behavior supersedes their checkbox, preview and blanket failure requirements.
+Current release: **0.2.4.10**. See [current release notes](../RELEASE-0.2.4.10.md) and [workflow notes](../RELEASE-0.2.4.9.md) for installation, supported workflows, local snapshot retention, bounded auto-healing and validation limits. Historical notes below describe earlier versions; current behavior supersedes their checkbox, preview and blanket failure requirements.
 
 ## Historical 0.2.4.1 baseline
 
