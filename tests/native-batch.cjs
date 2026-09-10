@@ -3,10 +3,11 @@ const fs=require('fs'),assert=require('node:assert/strict'),{chromium}=require('
  const browser=await chromium.launch({channel:'msedge',headless:true});
  const page=await browser.newPage({timezoneId:'America/Chicago',viewport:{width:1100,height:900}});
  page.on('pageerror',e=>{throw e;});
- await page.route('https://pafford.imagetrendelite.com/**',r=>r.fulfill({body:'<div id="form-composer"><div class="control"><label>Contacted</label><input id="fieldDate"><input id="fieldTime"></div></div>'+['29331','29332','29335','29336','29337','29338','29342'].map((id,i)=>`<input id="${id}Date" value="09/09/2026"><input id="${id}Time" value="${['10:50:00','10:53:00','10:59:00','11:00:00','11:15:00','11:30:00','12:00:00'][i]}">`).join('')}));
+ await page.route('https://pafford.imagetrendelite.com/**',r=>r.fulfill({body:'<div id="form-composer"><div class="control" id="9753adcb-f760-554b-94d6-60a5e82badd8"><label>Contacted</label><input id="fieldDate"><input id="fieldTime"></div></div>'+['29331','29332','29335','29336','29337','29338','29342'].map((id,i)=>`<input id="${id}Date" value="09/09/2026"><input id="${id}Time" value="${['10:50:00','10:53:00','10:59:00','11:00:00','11:15:00','11:30:00','12:00:00'][i]}">`).join('')}));
  await page.goto('https://pafford.imagetrendelite.com/#/Incident123/Form42');
  await page.evaluate(()=>{
    const response={Patient:{Vitals:[],PatientProcedures:[],Disposition:{DispositionNumberOfPatientsTransportedModValue:{NumberOfPatientsTransported:null},DispositionTransportModeFromSceneModValue:{TransportModeFromScene:null},HospitalTeamActivations:[]},InterfacilityTransfer:{AcceptingHospitalNotified:null}},ResponseTime:{ReceivingHospitalContacted:null},ResponseDelays:[],SceneDelays:[],TransportDelays:[],TurnAroundDelays:[]};
+   document.querySelector('#fieldTime').addEventListener('change',()=>{const d=document.querySelector('#fieldDate').value.split('/');response.ResponseTime.ReceivingHospitalContacted=d[2]+'-'+d[0]+'-'+d[1]+'T'+document.querySelector('#fieldTime').value;});
    window.model={Incident:{Scene:{Response:response}}};window.writes=[];
    window.ko={unwrap:x=>typeof x==='function'?x():x,contextFor:()=>({$root:{currentIncidentReadOnlyStatus:false},$parents:[model]})};
    const resources={};

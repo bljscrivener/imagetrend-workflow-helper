@@ -7,7 +7,8 @@ const { chromium } = require('playwright');
   await page.route('https://pafford.imagetrendelite.com/**', route => route.fulfill({body:'<html><body></body></html>',contentType:'text/html'}));
   await page.goto('https://pafford.imagetrendelite.com/#/Incident123/Form42');
   const source = fs.readFileSync('src/imagetrend-a15-native-test.user.js','utf8');
-  const code = source.slice(source.indexOf('  const choices='),source.indexOf('  const host=')) + source.slice(source.indexOf('  let times='),source.indexOf('  function reset')) + source.slice(source.indexOf('  const procedureWorkflow='),source.indexOf('  function currentRoot'));
+  const timeCode=source.slice(source.indexOf('  const TIME_LABELS='),source.indexOf('  async function writeReviewedTime'));
+  const code = timeCode + source.slice(source.indexOf('  const choices='),source.indexOf('  const host=')) + source.slice(source.indexOf('  let times='),source.indexOf('  function reset')) + source.slice(source.indexOf('  const procedureWorkflow='),source.indexOf('  function currentRoot'));
   const results = await page.evaluate(async code => {
     const stopRequested=false;const localStamp=x=>{const d=new Date(x),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());};eval(code + ';window.api={PROCEDURE_NAMES:["Assessment -ALS","Neurological assessment","Adult pain assessment","Moving a patient to a stretcher"],addProcedureBundle:async cb=>{await readTimes();return procedureWorkflow(api.PROCEDURE_NAMES,cb);}};');
     const results=[];
