@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ImageTrend A15 MVP helper
 // @namespace    local.imagetrend.workflow
-// @version      0.1.6
+// @version      0.1.7
 // @description  Review/apply vetted routine A15 ImageTrend defaults on the currently open form view. Never saves/submits.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        none
@@ -257,7 +257,7 @@
       const name = norm(readField(proc));
       if (name === 'Moving a patient to a stretcher') {
         const timing = stretcherTime(), fields = procedureTimeInputs(procedureFlyout());
-        for (const part of ['date','time']) out.push({element:fields[part],id:fields[part].id,label:'Stretcher procedure '+part,target:timing[part],input:true,mode:'procedureTime',derived:'Unit Left Scene minus 2 minutes; replaces current timestamp after review'});
+        for (const part of ['date','time']) out.push({element:fields[part],id:fields[part].id,label:'Stretcher procedure '+part,target:timing[part],input:true,mode:'procedureTime',derived:'Depart Scene minus 2 minutes; fallback Arrived on Scene plus 2 minutes; replaces current timestamp after review'});
       }
       const size = [...document.querySelectorAll(`${FORM} input[id$="25451"]`)].filter(visible);
       const comment = oneVisibleById('25450');
@@ -312,7 +312,7 @@
 
 
   let timelineSnapshot = null;
-  const TIMELINE_IDS = ['29337Date','29337Time','29336Date','29336Time'];
+  const TIMELINE_IDS = ['29337Date','29337Time','29336Date','29336Time','29335Date','29335Time'];
   function timelineChartKey() {
     const match = location.hash.match(/\/Incident\d+\/Form42(?:$|[/?])/);
     return match ? location.origin + location.pathname + match[0].replace(/[/?]$/, '') : null;
@@ -326,10 +326,10 @@
       const values = groups.map(nodes => {
         const shown = nodes.filter(visible);
         const candidates = shown.length ? shown : nodes;
-        return candidates.length === 1 && 'value' in candidates[0] ? norm(candidates[0].value) : null;
+        return !candidates.length ? '' : candidates.length === 1 && 'value' in candidates[0] ? norm(candidates[0].value) : null;
       });
       timelineSnapshot = null;
-      if (values.some(v => !v)) throw new Error('Timeline is incomplete or ambiguous. Open Timeline and click Read timeline.');
+      if (values.some(v => v === null)) throw new Error('Timeline is incomplete or ambiguous. Open Timeline and click Read timeline.');
       timelineSnapshot = {key, values, captured: Date.now()};
     } else if (requireLive) {
       timelineSnapshot = null;
@@ -337,7 +337,7 @@
     }
     if (!timelineSnapshot || Date.now() - timelineSnapshot.captured > 15 * 60000) {
       timelineSnapshot = null;
-      throw new Error('Open Timeline and click Read timeline, then return to Procedures. Timeline values are needed for transport minus 2 minutes.');
+      throw new Error('Open Timeline and click Read timeline, then return to Procedures. Timeline values are needed for stretcher timing.');
     }
     return timelineSnapshot.values;
   }
@@ -353,7 +353,9 @@
   function stretcherTime(requireLive = false) {
     const values = readTimelineSnapshot(requireLive);
     const read = offset => {
-      const d = values[offset], t = values[offset + 1], parsed = parseDT(d, t);
+      const d = values[offset], t = values[offset + 1];
+      if (!d || !t) return null;
+      const parsed = parseDT(d, t);
       if (!parsed || fmtDate(parsed) !== d || !/^(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(t)) {
         timelineSnapshot = null;
         throw new Error('Invalid timeline date/time. Correct it and click Read timeline.');
@@ -361,10 +363,15 @@
       return parsed;
     };
     const departure = read(0), contact = read(2);
-    const target = new Date(departure.getTime() - 120000);
-    if (target < contact) {
+    const scene = departure ? null : read(4);
+    if (!departure && !scene) {
       timelineSnapshot = null;
-      throw new Error('Transport minus 2 minutes precedes patient arrival. Review the timeline.');
+      throw new Error('Need Depart Scene or Arrived on Scene date/time. Open Timeline and click Read timeline.');
+    }
+    const target = new Date(departure ? departure.getTime() - 120000 : scene.getTime() + 120000);
+    if (contact && target < contact) {
+      timelineSnapshot = null;
+      throw new Error('Stretcher time precedes patient arrival. Review the timeline.');
     }
     return {date: fmtDate(target), time: fmtTime(target)};
   }
@@ -481,7 +488,7 @@
   const host=document.createElement('div');
   host.id='it-a15-helper-host'; host.style.cssText='position:fixed;right:16px;top:64px;z-index:2147483645';
   const root=host.attachShadow({mode:'open'});
-  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.6</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="timeline">Read timeline</button><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><hr><p><strong>Add four procedures</strong>: Assessment -ALS; Neurological assessment; Adult pain assessment; Moving a patient to a stretcher.</p><p class="meta">Start with a blank Procedure entry open. Uses Add Another and OK. Sets role to Paramedic on all four; stretcher time to Unit Left Scene minus 2 minutes. First open Timeline and click Read timeline; then return here. Review other times and clinical details afterward.</p><label><input id="procack" type="checkbox"> These four procedures were performed, are missing from this chart, and I want to add them with Paramedic role and the stated stretcher time.</label><p><button id="procrun" disabled>Add four procedures</button></p><p class="meta">No automatic chart Save/submit. Procedure timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
+  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.7</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="timeline">Read timeline</button><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><hr><p><strong>Add four procedures</strong>: Assessment -ALS; Neurological assessment; Adult pain assessment; Moving a patient to a stretcher.</p><p class="meta">Start with a blank Procedure entry open. Uses Add Another and OK. Sets role to Paramedic on all four; stretcher time to Depart Scene minus 2 minutes; fallback Arrived on Scene plus 2 minutes. First open Timeline and click Read timeline; then return here. Review other times and clinical details afterward.</p><label><input id="procack" type="checkbox"> These four procedures were performed, are missing from this chart, and I want to add them with Paramedic role and the stated stretcher time.</label><p><button id="procrun" disabled>Add four procedures</button></p><p class="meta">No automatic chart Save/submit. Procedure timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
   document.body.append(host);
   const $=s=>root.querySelector(s); let plan=[],busy=false,planUrl='';
   const log=t=>{$('#log').textContent+=`${t}\n`;};
