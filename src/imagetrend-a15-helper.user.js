@@ -531,7 +531,7 @@
     for(const key of Object.keys(sessionStorage)){
       if(!key.startsWith(prefix))continue;
       try {
-        const stored=new URL(key.slice(prefix));
+        const stored=new URL(key.slice(prefix.length));
         const match=stored.hash.match(/\/Incident\d+\/Form42(?=$|[/?])/);
         if(stored.origin===location.origin && stored.pathname===location.pathname && match?.[0]===chart[0])sessionStorage.removeItem(key);
       }catch(_){/* Leave unrelated or unrecognized keys intact. */}
