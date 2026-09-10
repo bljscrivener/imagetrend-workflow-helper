@@ -94,7 +94,7 @@ For an already-open procedure entry:
 
 ## Intentionally not in v0.1.2
 
-- Creating the procedure bundle automatically.
+- Starting procedure creation from the main grid automatically; v0.1.4 supports the four-procedure bundle from an already-open blank Procedure flyout.
 - Applying Patient Arrival / Destination Arrival procedure timestamps automatically.
 - Derived stretcher +3 minute / scene-departure -2 minute fallback timing.
 - Automatic ETCO2-unit deselection.
@@ -127,3 +127,15 @@ Live ImageTrend validation remains pending. Replace the installed script with v0
 ## v0.1.3 transport profile correction
 
 User screenshot and clarification confirm Transport from Scene Type should target `No Lights or Sirens`. The prior downgraded-response default was incorrect. An existing matching value now scans as KEPT; blank fields propose this corrected value. Other existing values remain conflicts. Transport Mode from Scene remains `Without Lights and Sirens`. Syntax check passed; live application of this version remains pending.
+
+## v0.1.4 four-procedure bundle
+
+Open a blank Procedure entry using ImageTrend Add, then open the helper. Review the four names and acknowledge that they were performed and are missing from this chart. Click **Add four procedures**.
+
+The helper selects Assessment -ALS, Neurological assessment, Adult pain assessment, and Moving a patient to a stretcher in sequence, using the captured single-select option handlers (and search input when needed). It clicks the captured Add Another button after the first three entries and OK after the last. It requires a new generated procedure date-input ID and blank selector before advancing, and checks selection before each confirmation.
+
+This action adds procedure names only. Review dates/times, metadata, and clinical details afterward; automatic timing and destination reassessments are not part of this action. The existing reviewed-field helper remains available for metadata. Chart Save/submit is never clicked, but Add Another and OK accept procedure entries inside ImageTrend.
+
+The helper refuses populated starting entries, multiple/unknown flyouts, disabled controls (including ImageTrend's CSS disabled class), ambiguous or missing options, and failed transitions. A sessionStorage guard marks the attempt before any mutation and blocks repeat attempts in the same tab/chart, including after reload. It does not inventory existing chart procedures: the user must confirm the four are missing. A partial failure leaves earlier entries and possibly the open draft for manual review; do not add the bundle again blindly.
+
+Validation: syntax check and eight synthetic Edge browser cases passed: four-entry success, search fallback, populated entry refusal, disabled button, missing option, duplicate options, no advancement, and repeat-attempt block. Run with Playwright and Edge: `node tests/procedure-bundle.cjs`. Live ImageTrend validation remains pending. Source markup was inspected locally and is not committed.
