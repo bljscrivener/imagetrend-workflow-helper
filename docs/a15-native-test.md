@@ -27,3 +27,12 @@ Tests cover two vital entries, replacement AVPU and GCS, nested GCS qualifiers, 
 
 Removed the field dropdown. Profile: A15 is fixed and Preview A15 changes reviews the full supported profile. STEMI, CVA and trauma are future profiles, not currently selectable.
 
+
+## 0.2.4.6 procedure timing and bounded clear
+
+Procedure recognition resolves exact codes across loaded resource catalogs, normalizes spacing and hyphens, and rejects conflicting labels. Missing mappings are distinguished from unsupported procedures. Procedure timestamps use Arrived at Patient for assessments; stretcher uses Depart Scene minus two minutes, falling back to Scene Arrival plus two minutes only when departure is unavailable. Missing/invalid time blocks timing only. Times are reread before approved timestamp writes and proposals are revalidated. Reading unchanged times does not reset the review.
+
+Clear chart entries is intentionally narrower than a complete chart wipe. It removes only Vitals, PatientProcedures, ProtocolUseds and Medications through native collection removeAll, after showing counts and two confirmations. Dispatch, timeline and other fields are not targeted. Unknown/unavailable removal methods block the whole clear plan. Native persistence may occur. No rollback is provided. A full dispatch-preserving chart wipe remains unimplemented pending field provenance mapping.
+
+Synthetic regression covers alternate procedure resource catalog, assessment timestamp, known-entry role correction, collection-clear cancellation and two confirmations, dispatch/timeline preservation, and prior entry tests. Live validation of this release is pending.
+
