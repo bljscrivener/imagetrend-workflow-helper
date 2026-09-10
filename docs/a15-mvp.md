@@ -139,3 +139,13 @@ This action adds procedure names only. Review dates/times, metadata, and clinica
 The helper refuses populated starting entries, multiple/unknown flyouts, disabled controls (including ImageTrend's CSS disabled class), ambiguous or missing options, and failed transitions. A sessionStorage guard marks the attempt before any mutation and blocks repeat attempts in the same tab/chart, including after reload. It does not inventory existing chart procedures: the user must confirm the four are missing. A partial failure leaves earlier entries and possibly the open draft for manual review; do not add the bundle again blindly.
 
 Validation: syntax check and eight synthetic Edge browser cases passed: four-entry success, search fallback, populated entry refusal, disabled button, missing option, duplicate options, no advancement, and repeat-attempt block. Run with Playwright and Edge: `node tests/procedure-bundle.cjs`. Live ImageTrend validation remains pending. Source markup was inspected locally and is not committed.
+
+## v0.1.5 procedure role and stretcher timing
+
+User confirmed live four-entry creation works. The bundle now corrects blank or Critical Care Paramedic roles to Paramedic on every generated procedure, verifying before accepting each entry. Unexpected roles stop the bundle.
+
+Moving a patient to a stretcher now uses Unit Left Scene (29337Date/Time) minus two minutes, superseding the earlier preferred patient-arrival-plus-three rule for this action. Patient arrival (29336Date/Time) provides the lower chronology bound. Missing/ambiguous/invalid timeline fields or a result before patient arrival block the action. The timeline must be loaded in the DOM. Date rollover is handled; no current-clock fallback is used. Other procedure timestamps remain unchanged.
+
+To repair the already-created stretcher entry, open it, Scan this view, review the proposed date/time and role corrections, then Apply reviewed fields. The original timestamp is shown in the plan and replaced only after review. Timeline changes since review invalidate the timing correction. Do not run Add four procedures again to repair existing entries.
+
+Validation: syntax and twelve synthetic browser scenarios passed, including role corrections on all four entries, ordinary and midnight timing, existing-entry repair, impossible chronology, missing role, and existing bundle failure guards. Live v0.1.5 validation remains pending.
