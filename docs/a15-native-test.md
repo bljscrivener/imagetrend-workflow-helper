@@ -11,3 +11,7 @@ Only blank answers can be written. Populated answers and special flags are prese
 This is a native field-mapping test, not full A15 feature parity. Procedures, repeated vitals, hospital activation rows, input values, priority-dependent service selection, timeline/delay derivation, and clearing require further native validation and are not executed. Service is deliberately withheld rather than retaining the old unconditional emergency default. Timing/clear tools are not present in this test UI.
 
 Validation: syntax and synthetic browser tests passed, including both previously proven targets absent from the current page, circular model references, unsupported mappings alongside ready actions, existing-value preservation, stale preview rejection, and locked/unknown chart states. The broader native build needs live TEST-chart verification. Only the two Preset Lab fields have user-confirmed live off-page success.
+## 0.2.4.2 mapping capture
+
+Adds Copy field mappings above the selector. Open a vital or procedure entry, click this button and paste into the development chat. Capture whitelists binding paths, definition/control identifiers and multiplicity flags; no answer values are included. Clipboard failures display an error. Existing A15 native write scope is unchanged; repeated entries remain pending these mappings. Synthetic capture tests confirm no answer leakage or writes.
+
