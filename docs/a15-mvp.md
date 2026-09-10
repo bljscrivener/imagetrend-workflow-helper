@@ -1,3 +1,5 @@
+> Historical MVP notes. See [v0.2.0](a15-v0.2.0.md) for the current interface and behavior.
+
 # A15 MVP
 
 ## Goal

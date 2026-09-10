@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         ImageTrend A15 MVP helper
 // @namespace    local.imagetrend.workflow
-// @version      0.1.10
+// @version      0.2.0
 // @description  Review/apply vetted routine A15 ImageTrend defaults on the currently open form view. Never saves/submits.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
-// @grant        none
+// @grant        GM_getResourceURL
+// @resource     clearArtwork https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/assets/clear-warning.png
 // @run-at       document-idle
 // @noframes
 // ==/UserScript==
@@ -54,6 +55,8 @@
       nodes = [...c.querySelectorAll('.koMultiselect-selectedItem, .koMultiselect-selected-item')].filter(visible);
     }
     const vals = nodes.map(n => norm(n.textContent)).filter(Boolean);
+    const special = [...c.querySelectorAll('.mod-value-watermark,.overlay-label')].filter(visible).map(n=>norm(n.textContent)).filter(v=>v==='Not Applicable'||v==='Not Recorded');
+    if (!vals.length && special.length) return [...new Set(special)];
     return [...new Set(vals)];
   }
   function readField(el) {
@@ -118,6 +121,7 @@
   async function setChoice(el, target, before) {
     const c = containerOf(el);
     if (!unchanged(readField(el), before)) throw new Error('Field changed since review.');
+    if (target === 'Not Applicable') { await setSpecialChoice(el,target,before); return; }
     let nodes = optionNodes(c, target);
     if (!nodes.some(visible)) { await expose(c); nodes = optionNodes(c, target); }
     const usable = [...new Set(nodes.filter(visible).map(n => clickable(n, c)).filter(Boolean).filter(visible))];
@@ -255,9 +259,9 @@
     const proc = oneVisibleById('02dffd5f-4c68-506b-881d-5b00c78090aa');
     if (proc) {
       const name = norm(readField(proc));
-      if (name === 'Moving a patient to a stretcher') {
-        const timing = stretcherTime(), fields = procedureTimeInputs(procedureFlyout());
-        for (const part of ['date','time']) out.push({element:fields[part],id:fields[part].id,label:'Stretcher procedure '+part,target:timing[part],input:true,mode:'procedureTime',derived:'Depart Scene minus 2 minutes; fallback Arrived on Scene plus 2 minutes; replaces current timestamp after review'});
+      if (PROCEDURE_NAMES.includes(name)) {
+        const timing = name === 'Moving a patient to a stretcher' ? stretcherTime() : patientArrivalTime(), fields = procedureTimeInputs(procedureFlyout());
+        for (const part of ['date','time']) out.push({element:fields[part],id:fields[part].id,label:name+' '+part,target:timing[part],input:true,mode:'procedureTime',derived:(name === 'Moving a patient to a stretcher' ? 'Depart Scene − 2 min; fallback Scene Arrival + 2 min' : 'Arrived at Patient')+'; reviewed timestamp correction',procedureName:name});
       }
       const size = [...document.querySelectorAll(`${FORM} input[id$="25451"]`)].filter(visible);
       const comment = oneVisibleById('25450');
@@ -274,6 +278,11 @@
     if (!el) return null;
     if (rule.input && isProtectedNumericId(el.id)) return {rule,el,status:'blocked',before:readField(el),note:'Protected clinical numeric field'};
     const before = readField(el);
+    if (Array.isArray(rule.target)) {
+      const vals=listValue(before);
+      const status=sameSet(vals,rule.target)?'kept':vals.every(v=>rule.target.includes(v))?'ready':'conflict';
+      return {rule,el,status,before,note:status==='conflict'?'Existing value preserved':''};
+    }
     if (same(before,rule.target)) return {rule,el,status:'kept',before};
     if (rule.mode === 'procedureTime') return {rule,el,status:'ready',before,note:'Reviewed timestamp correction'};
     if (rule.mode === 'procedureRole') {
@@ -285,34 +294,44 @@
   }
   function buildPlan() {
     const results=[];
-    for (const rule of [...RULES,...derivedRules()]) {
+    for (const rule of [...RULES,...derivedRules(),...delayRules()]) {
       try { const x=inspect(rule); if (x) results.push(x); }
       catch(e) { results.push({rule,el:null,status:'blocked',before:'',note:e.message}); }
     }
     const et=[...document.querySelectorAll(`${FORM} input[id$="25352"]`)].filter(visible);
     const units=oneVisibleById('01975843-3408-5a00-b45b-79e64e0db108');
     if (et.length===1 && units && blank(et[0].value) && same(readField(units),'mmHg')) results.push({rule:{id:units.id,label:'ETCO2 Units',target:'blank'},el:units,status:'manual',before:'mmHg',note:'ETCO2 blank: deselect mmHg manually for now.'});
+    const activation=activationPlan(); if(activation) results.push(activation);
     return results;
   }
   async function apply(item) {
     const {rule,el,before}=item;
-    if (!el || item.status!=='ready') return;
+    if (item.status!=='ready') return;
+    if (rule.action==='activation') { await addHospitalActivation(); return; }
+    if (!el) return;
+    if (!el.isConnected || !visible(el)) throw new Error('Field is no longer visible. Review again.');
+    if (rule.delay) {
+      const fresh=delayRules().find(r=>r.id===rule.id);
+      if(!fresh||!sameSet(fresh.target,rule.target))throw new Error('Delay timeline changed. Review again.');
+    }
+    if (Array.isArray(rule.target)) { await setChoiceSet(el,rule.target,before); recordChange(item); return; }
     if (rule.input) {
       if (rule.mode === 'procedureTime') {
-        const timing = stretcherTime(), part = el.id.endsWith('Date') ? 'date' : 'time';
+        const timing = rule.procedureName === 'Moving a patient to a stretcher' ? stretcherTime() : patientArrivalTime(), part = el.id.endsWith('Date') ? 'date' : 'time';
         if (rule.target !== timing[part]) throw new Error('Timeline changed since review. Scan again.');
       }
       if (!unchanged(readField(el),before)) throw new Error(`${rule.label}: changed since review.`);
       nativeSetInput(el,rule.target); await sleep(120);
       if (!same(readField(el),rule.target)) throw new Error(`${rule.label}: ImageTrend did not confirm input change.`);
     } else await setChoice(el,rule.target,before);
+    recordChange(item);
   }
 
 
 
 
   let timelineSnapshot = null;
-  const TIMELINE_IDS = ['29337Date','29337Time','29336Date','29336Time','29335Date','29335Time'];
+  const TIMELINE_IDS = ['29337Date','29337Time','29336Date','29336Time','29335Date','29335Time','29331Date','29331Time','29332Date','29332Time','29338Date','29338Time','29342Date','29342Time'];
   function timelineChartKey() {
     const match = location.hash.match(/\/Incident\d+\/Form42(?:$|[/?])/);
     return match ? location.origin + location.pathname + match[0].replace(/[/?]$/, '') : null;
@@ -391,15 +410,21 @@
       if (!blank(before) && !same(before, 'Critical Care Paramedic')) throw new Error('Unexpected procedure role; existing value preserved.');
       await setChoice(role, 'Paramedic', before);
     }
-    if (name === 'Moving a patient to a stretcher') {
-      const currentTiming = stretcherTime();
-      if (JSON.stringify(currentTiming) !== JSON.stringify(timing)) throw new Error('Timeline changed during bundle.');
+    {
+      const currentTiming = name === 'Moving a patient to a stretcher' ? stretcherTime() : patientArrivalTime();
+      const plannedTime = name === 'Moving a patient to a stretcher' ? timing.stretcher : timing.arrival;
+      if (JSON.stringify(currentTiming) !== JSON.stringify(plannedTime)) throw new Error('Timeline changed during bundle.');
       const inputs = procedureTimeInputs(f);
-      nativeSetInput(inputs.date, timing.date);
-      nativeSetInput(inputs.time, timing.time);
+      nativeSetInput(inputs.date, plannedTime.date);
+      nativeSetInput(inputs.time, plannedTime.time);
       await sleep(150);
-      if (norm(inputs.date.value) !== timing.date || norm(inputs.time.value) !== timing.time)
-        throw new Error('ImageTrend did not confirm stretcher time.');
+      if (norm(inputs.date.value) !== plannedTime.date || norm(inputs.time.value) !== plannedTime.time)
+        throw new Error('ImageTrend did not confirm procedure time.');
+    }
+    for (const id of ['c07c1d8b-c7d4-5a5a-8ec1-01bf67f882e0','6a3cd763-c562-574c-b209-bbced74d73c1','adcc71b8-0b92-5387-8b9f-cb94b729e4ac']) {
+      const rule=RULES.find(r=>r.id===id), el=scopedField(f,id), value=readField(el);
+      if (blank(value)) await setChoice(el,rule.target,value);
+      else if (!same(value,rule.target)) throw new Error(rule.label+': existing conflict preserved.');
     }
     if (!same(readField(role), 'Paramedic')) throw new Error('ImageTrend did not retain Paramedic.');
   }
@@ -460,7 +485,7 @@
     if (!/\/Incident\d+\/Form42(?:$|[/?])/.test(location.hash)) throw new Error('Open a Form42 chart.');
     const storageKey = 'it-a15-procedure-bundle:' + url;
     if (sessionStorage.getItem(storageKey)) throw new Error('Bundle already attempted in this tab. Review existing procedures before adding anything manually.');
-    const timing = stretcherTime();
+    const timing = {stretcher:stretcherTime(),arrival:patientArrivalTime()};
     let f = await openProcedureEntry();
     if (!blank(readField(procedureField(f)))) throw new Error('The open procedure is populated. Open a blank entry first.');
     procedureKey(f);
@@ -486,6 +511,7 @@
       if (location.href !== url || procedureFlyout() !== f || procedureKey(f) !== key || !blank(readField(field)))
         throw new Error('Procedure changed while finding option.');
       await setChoice(field, PROCEDURE_NAMES[i], readField(field));
+      recordChange({el:field,before:'',rule:{id:field.id,label:PROCEDURE_NAMES[i],target:PROCEDURE_NAMES[i]}});
       if (location.href !== url || procedureFlyout() !== f || procedureKey(f) !== key ||
           !same(readField(field), PROCEDURE_NAMES[i])) throw new Error('Procedure changed before confirmation.');
       await applyBundleDetails(f, PROCEDURE_NAMES[i], timing);
@@ -512,54 +538,520 @@
     sessionStorage.setItem(storageKey, 'completed');
   }
 
+  // Native DOM adapters only. No Knockout view-model evaluation or direct writes.
+  function scopedField(scope,id) {
+    const found=[...scope.querySelectorAll('[id="'+CSS.escape(id)+'"]')].filter(visible);
+    if(found.length!==1)throw new Error('Field '+id+' missing or ambiguous.');
+    return found[0];
+  }
+  async function until(check,message,timeout=4000) {
+    const chart=timelineChartKey(), end=Date.now()+timeout;
+    while(Date.now()<end) {
+      if(chart!==timelineChartKey())throw new Error('Chart changed.');
+      const result=check(); if(result)return result;
+      await sleep(80);
+    }
+    throw new Error(message);
+  }
+  function selectedSpecial(c,target) {
+    return [...c.querySelectorAll('.mod-value-watermark,.overlay-label')].filter(visible)
+      .some(n=>norm(n.textContent)===target);
+  }
+  async function setSpecialChoice(el,target,before) {
+    const c=containerOf(el);
+    if(!unchanged(readField(el),before))throw new Error('Field changed since review.');
+    const choices=[...c.querySelectorAll('.not-value')].filter(n=>norm(n.querySelector('.not-value-label')?.textContent)===target);
+    if(choices.length!==1)throw new Error('Special value '+target+' missing or ambiguous.');
+    const choice=choices[0], opener=choice.closest('.mod-value-action');
+    if(!opener || !/(?:^|,)\s*click\s*:\s*toggleOpen(?:,|$)/.test(opener.getAttribute('data-bind')||''))throw new Error('Special-value menu opener not recognized.');
+    if(disabledChoice(opener,c)||disabledChoice(choice,c))throw new Error('Special-value menu is disabled.');
+    if(!visible(choice)) {opener.click();await until(()=>visible(choice),'Special-value menu did not open.');}
+    if(!unchanged(readField(el),before))throw new Error('Field changed while opening special values.');
+    choice.click();
+    await until(()=>el.isConnected && (same(readField(el),target)||selectedSpecial(c,target)),'ImageTrend did not confirm '+target+'.');
+    // Close only this menu, without toggling the selected special value.
+    if(visible(choice)) {
+      const close=opener.parentElement.querySelector('.close-overlay[data-bind*="isOpen(false)"]');
+      if(close&&visible(close))close.click();
+    }
+  }
+  const listValue=v=>Array.isArray(v)?v.map(norm):blank(v)?[]:[norm(v)];
+  const sameSet=(a,b)=>{a=listValue(a);b=listValue(b);return a.length===b.length&&a.every(v=>b.includes(v));};
+  async function setChoiceSet(el,targets,before) {
+    if(!unchanged(readField(el),before))throw new Error('Field changed since review.');
+    const existing=listValue(before);
+    if(existing.some(v=>!targets.includes(v)))throw new Error('Existing delay value preserved.');
+    const c=containerOf(el);
+    for(const target of targets) {
+      const snapshot=readField(el);
+      if(listValue(snapshot).includes(target))continue;
+      let nodes=optionNodes(c,target).filter(visible);
+      if(!nodes.length){await expose(c);nodes=optionNodes(c,target).filter(visible);}
+      const buttons=[...new Set(nodes.map(n=>clickable(n,c)).filter(Boolean))];
+      if(buttons.length!==1||disabledChoice(buttons[0],c)||norm(buttons[0].textContent)!==norm(target))throw new Error('Delay choice '+target+' missing, disabled or ambiguous.');
+      if(!unchanged(readField(el),snapshot))throw new Error('Delay changed during review.');
+      buttons[0].click();
+      const expected=[...listValue(snapshot),target];
+      await until(()=>sameSet(readField(el),expected),'Delay selection did not confirm.');
+    }
+  }
+  function timelineDate(prefix,required=false) {
+    const values=readTimelineSnapshot(), i=TIMELINE_IDS.indexOf(prefix+'Date');
+    const d=values[i], t=values[i+1];
+    if(i<0||!d||!t){if(required)throw new Error('Missing timeline '+prefix+'.');return null;}
+    const parsed=parseDT(d,t);
+    if(!parsed||fmtDate(parsed)!==d||!/^(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(t))throw new Error('Invalid timeline '+prefix+'.');
+    return parsed;
+  }
+  function patientArrivalTime() {
+    const d=timelineDate('29336',true);
+    return {date:fmtDate(d),time:fmtTime(d)};
+  }
+  function fieldByLabel(label,scope=document) {
+    const labels=[...scope.querySelectorAll('label')].filter(visible).filter(n=>norm(n.textContent).replace(/:$/,'').toLowerCase()===label.toLowerCase());
+    if(labels.length!==1)return null;
+    return labels[0].closest('.single-row-control,.smart-list-control');
+  }
+  function delayRules() {
+    const out=[];
+    const delayField=kind=>{
+      const fields=[kind+' Delay',kind+' Delays','Type of '+kind+' Delay','Type of '+kind+' Delays'].map(label=>fieldByLabel(label)).filter(Boolean);
+      const unique=[...new Set(fields)];
+      if(unique.length>1)throw new Error(kind+' delay field is ambiguous.');
+      return unique[0]||null;
+    };
+    const push=(label,target,derived)=>{
+      const el=delayField(label.replace(' Delay','')); if(!el)return;
+      const canonical=value=>{
+        const options=[...el.querySelectorAll('.koMultiselect-dropDownItem,.koSingleselect-dropDownItem,button.smart-list-item,[data-bind*="getOptionDisplay"]')]
+          .map(n=>norm(n.textContent)).filter(v=>v.toLowerCase()===value.toLowerCase());
+        const unique=[...new Set(options)];return unique.length===1?unique[0]:value;
+      };
+      out.push({id:el.id,element:el,label,target:Array.isArray(target)?target.map(canonical):canonical(target),mode:'fillBlank',derived,delay:true});
+    };
+    push('Transport Delay','None','Routine transport default');
+    const response=delayField('Response'), destination=delayField('Destination');
+    if(!response&&!destination)return out;
+    const duration=(a,b)=>{
+      const start=timelineDate(a),end=timelineDate(b);
+      if(!start||!end)return null;
+      if(end<start)throw new Error('Delay timeline is out of order.');
+      return (end-start)/1000;
+    };
+    if(response&&duration('29331','29332')>120)push('Response Delay','Staff delay','Unit Notified by Dispatch → Unit En Route > 120 seconds');
+    if(destination&&duration('29338','29342')>1200)push('Destination Delay',['Documentation','ED crowding/transfer of care'],'Destination → Unit Back in Service > 20 minutes');
+    return out; // Scene delays are always manual.
+  }
+  function namedGrid(name) {
+    const grids=[...document.querySelectorAll('.grid-control')].filter(visible)
+      .filter(g=>norm(g.querySelector('.grid-header .grid-label')?.textContent)===name);
+    if(grids.length>1)throw new Error(name+' grid is ambiguous.');
+    return grids[0]||null;
+  }
+  function activationPlan() {
+    const g=namedGrid('Hospital Team Activations'); if(!g)return null;
+    const lists=g.querySelectorAll('.grid-item-display');
+    if(lists.length!==1)return {rule:{label:'Hospital Team Activations',target:'No'},status:'blocked',before:'',note:'List not recognized'};
+    if(lists[0].children.length||norm(lists[0].textContent))return null; // Existing entry is handled by normal field rules.
+    return {rule:{label:'Hospital Team Activations',target:'No',action:'activation'},el:g,status:'ready',before:'',note:'Add one missing entry; no timestamp is invented'};
+  }
+  async function addHospitalActivation() {
+    const item=activationPlan();
+    if(!item||item.status!=='ready')throw new Error('Hospital activation list changed. Review again.');
+    const g=item.el, choices=[...g.querySelectorAll('.grid-actions button')].filter(visible)
+      .filter(b=>norm(b.textContent)==='Add'&&(b.getAttribute('data-bind')||'').includes('grid.addGridItemWithoutSubformSelection($context)'));
+    if(choices.length!==1||disabledChoice(choices[0],g))throw new Error('Hospital activation Add unavailable.');
+    choices[0].click();
+    const el=await until(()=>{
+      const matches=[...g.querySelectorAll('[id="16ccfb92-ef4d-5527-a0ee-39639fd222f4"]')].filter(visible);
+      return matches.length===1?matches[0]:null;
+    },'Hospital activation entry did not appear.');
+    const before=readField(el);
+    if(!blank(before)&&!same(before,'No'))throw new Error('Existing activation answer preserved.');
+    if(blank(before)){await setChoice(el,'No',before);recordChange({el,before,rule:{id:el.id,label:'Destination Team Pre-Arrival Alert or Activation',target:'No'}});}
+  }
+  function panelName(){return norm(document.querySelector('#panel-header')?.textContent);}
+  function sectionKind() {
+    const title=panelName();
+    if(/vital/i.test(title)||[...document.querySelectorAll('input[id$="25333Date"]')].some(visible))return 'Vitals';
+    if(/procedure|medication|treatment|ventilator|blood product/i.test(title)||[...document.querySelectorAll('.grid-flyout-active .grid-label')].some(n=>norm(n.textContent)==='Procedure'))return 'Treatment';
+    if(/transport|destination|flight|refusal/i.test(title))return 'Transport';
+    if(/delay/i.test(title))return 'Delays';
+    return 'Chart';
+  }
+  function textAction(scope,text) {
+    if(!scope)return null;
+    const nodes=[...scope.querySelectorAll('button,a,[role="button"],[data-bind]')].filter(visible);
+    const matches=nodes.filter(n=>{
+      const content=norm(n.textContent), aria=norm(n.getAttribute('aria-label')||n.getAttribute('title'));
+      return (content===text||aria===text)&&(n.matches('button,a,[role="button"]')||/(?:^|,)\s*click\s*:/.test(n.getAttribute('data-bind')||''));
+    });
+    // A nested caption and its clickable parent represent one action.
+    const leaves=matches.filter(n=>!matches.some(other=>other!==n&&n.contains(other)));
+    if(leaves.length!==1)return null;
+    if(disabledChoice(leaves[0],scope))throw new Error(text+' is disabled.');
+    return leaves[0];
+  }
+  async function automaticTimeline() {
+    const visibleTimes=()=>TIMELINE_IDS.some(id=>[...document.querySelectorAll('[id="'+id+'"]')].some(visible));
+    const capture=()=>{
+      const values=readTimelineSnapshot(true);
+      if(values.every(v=>!v)){timelineSnapshot=null;throw new Error('Timeline has no timestamps yet.');}
+      for(const prefix of ['29337','29336','29335','29331','29332','29338','29342'])timelineDate(prefix);
+    };
+    if(visibleTimes()){capture();return;}
+    const side=document.querySelector('#right-pane')||document.querySelector('#right-side-pane');
+    const opener=textAction(side,'Times')||textAction(side,'Timeline');
+    if(!opener)throw new Error('Timeline navigation unavailable. Open Times once and click Read timeline.');
+    const chart=timelineChartKey(), previous=panelName();
+    opener.click();
+    let readError=null;
+    try {await until(visibleTimes,'Timeline did not open.');capture();}
+    catch(e){readError=e;}
+    // The right-pane Times/Timeline control is a toggle. Never click chart Save/OK.
+    if(chart===timelineChartKey()&&opener.isConnected&&visibleTimes()) {
+      opener.click();
+      await until(()=>!visibleTimes() && panelName()===previous,'Timeline did not close. Close it before continuing.');
+    }
+    if(readError)throw readError;
+  }
+  async function ensureSection(name) {
+    if(panelName()===name)return;
+    if([...document.querySelectorAll('.grid-flyout-active')].some(visible))throw new Error('Close the open entry before chart-wide navigation.');
+    const nav=document.querySelector('#left-pane');
+    let action=textAction(nav,name);
+    if(!action) {
+      const parent={'Transport Info':'Transport/Refusal','Procedures & Medications':'Treatment','Vital Signs':'Assessment'}[name];
+      const group=parent&&textAction(nav,parent);
+      if(group){group.click();await sleep(150);action=textAction(nav,name);}
+    }
+    if(!action)throw new Error('Navigation to '+name+' unavailable.');
+    action.click();
+    await until(()=>panelName()===name,'Could not open '+name+'.');
+  }
+  const VITAL_IDS=new Set(RULES.slice(RULES.findIndex(r=>r.label==='AVPU'),RULES.findIndex(r=>r.label==="Procedure Performed Prior to this Unit's EMS Care")).map(r=>r.id));
+  function vitalGrid() {
+    const candidates=[...document.querySelectorAll('.grid-control')].filter(visible).filter(g=>/^(Vital Signs|Vitals)$/.test(norm(g.querySelector('.grid-header .grid-label')?.textContent)));
+    if(candidates.length!==1)throw new Error('Open the multiple-vitals list first.');
+    return candidates[0];
+  }
+  function vitalRows() {
+    const g=vitalGrid(), lists=g.querySelectorAll('.grid-item-display');
+    if(lists.length!==1)throw new Error('Vital list not recognized.');
+    if([...g.querySelectorAll('.grid-filter')].some(b=>!b.classList.contains('grid-button-highlighted')))throw new Error('Show all vital sets before reviewing.');
+    return [...lists[0].children].filter(visible);
+  }
+  function vitalScope() {
+    const dates=[...document.querySelectorAll('input[id$="25333Date"]')].filter(visible);
+    if(dates.length!==1)throw new Error('Expected one vital entry.');
+    return dates[0].closest('.grid-flyout-overlay')||dates[0].closest('.grid-item')||null;
+  }
+  function vitalPlan(scope) {
+    if(!scope)throw new Error('Vital entry container unavailable.');
+    const items=[];
+    for(const rule of RULES.filter(r=>VITAL_IDS.has(r.id))) {
+      const found=[...scope.querySelectorAll('[id="'+rule.id+'"]')].filter(visible);
+      if(found.length>1)throw new Error('Duplicate vital control.');
+      if(!found.length)continue;
+      items.push(inspect({...rule,element:found[0]}));
+    }
+    return items;
+  }
+  async function openVitalRow(row) {
+    const inline=row.querySelector('input[id$="25333Date"]');
+    if(inline&&visible(inline))return {scope:row,modal:false};
+    const buttons=[row,...row.querySelectorAll('[data-bind],button')].filter(visible).filter(n=>{
+      const binding=n.getAttribute('data-bind')||'';
+      return /click\s*:/.test(binding)&&/grid\.(?:open|edit)\w*\s*\(/i.test(binding)&&!/delete|remove|add/i.test(binding);
+    });
+    const targets=buttons.filter(n=>!buttons.some(x=>x!==n&&n.contains(x)));
+    if(targets.length!==1)throw new Error('Vital-row edit control not recognized. A full vitals-list capture is needed.');
+    targets[0].click();
+    const scope=await until(()=>{try{return vitalScope();}catch(_){return null;}},'Vital entry did not open.');
+    return {scope,modal:true};
+  }
+  async function closeVital(scope,accept) {
+    const handler=accept?'okButtonClickHandler':'cancelButtonClickHandler', label=accept?'OK':'Cancel';
+    procedureButton(scope,handler,label).click();
+    await until(()=>!scope.isConnected||!visible(scope),'Vital entry did not return to the list.');
+  }
+  async function reviewVitals() {
+    const rows=vitalRows(), result=[];
+    for(let i=0;i<rows.length;i++) {
+      const row=rows[i], fingerprint=norm(row.textContent), opened=await openVitalRow(row);
+      try {
+        const items=vitalPlan(opened.scope);
+        if(!items.length)throw new Error('No known vital metadata controls found.');
+        result.push({index:i,fingerprint,items:items.map(x=>({...x,el:null,rule:{...x.rule,element:undefined}}))});
+      } finally {if(opened.modal)await closeVital(opened.scope,false);}
+    }
+    return result;
+  }
+  async function applyVitalSet(set) {
+    const rows=vitalRows(), row=rows[set.index];
+    if(!row||norm(row.textContent)!==set.fingerprint)throw new Error('Vital list changed since review.');
+    const opened=await openVitalRow(row);
+    try {
+      for(const item of set.items.filter(x=>x.status==='ready'&&x.selected!==false)) {
+        const el=scopedField(opened.scope,item.rule.id);
+        await apply({...item,el,rule:{...item.rule,element:el}});
+      }
+      if(opened.modal)await closeVital(opened.scope,true);
+    } catch(e) {throw new Error(e.message+' Review the open vital entry; earlier changes may remain.');}
+  }
+  const changeJournal=[];
+  function recordChange(item) {
+    if(!blank(item.before)||item.rule.input&&isProtectedNumericId(item.el.id))return;
+    if(changeJournal.some(x=>x.el===item.el&&x.key===timelineChartKey()))return;
+    const scope=item.el.closest('.grid-flyout-overlay,.grid-item');
+    const entryKey=scope?.querySelector('input[id$="25443Date"],input[id$="25333Date"]')?.id||null;
+    changeJournal.push({key:timelineChartKey(),el:item.el,id:item.el.id,entryKey,label:item.rule.label,after:readField(item.el)});
+  }
+  function clearCandidate(entry) {
+    if(entry.key!==timelineChartKey())return false;
+    const candidates=[...document.querySelectorAll('[id="'+CSS.escape(entry.id)+'"]')].filter(visible).filter(el=>{
+      if(!entry.entryKey)return true;
+      const scope=el.closest('.grid-flyout-overlay,.grid-item');
+      return !!scope?.querySelector('[id="'+CSS.escape(entry.entryKey)+'"]');
+    });
+    if(candidates.length!==1)return false;
+    entry.el=candidates[0];
+    const c=containerOf(entry.el);
+    const supported=('value' in entry.el&&!isProtectedNumericId(entry.el.id))||
+      [...c.querySelectorAll('.koSingleselect-selectedItem-unselect,.koMultiselect-selectedItem-unselect,.close-container[data-bind*="deselectCurrentModValue"]')].some(visible);
+    return supported&&entry.key===timelineChartKey()&&entry.el.isConnected&&visible(entry.el)&&unchanged(readField(entry.el),entry.after);
+  }
+  async function clearAddedValue(entry) {
+    if(!clearCandidate(entry))throw new Error(entry.label+': changed or unavailable; preserved.');
+    const el=entry.el,c=containerOf(el);
+    if('value' in el&&!isProtectedNumericId(el.id)){nativeSetInput(el,'');}
+    else {
+      const selectors='.koSingleselect-selectedItem-unselect,.koMultiselect-selectedItem-unselect,.close-container[data-bind*="deselectCurrentModValue"]';
+      let removers=[...c.querySelectorAll(selectors)].filter(visible);
+      if(!removers.length)throw new Error(entry.label+': clear control not recognized; preserved.');
+      for(const remover of removers) {
+        if(disabledChoice(remover,c))throw new Error('Clear control disabled.');
+        remover.click();await sleep(100);
+      }
+    }
+    await until(()=>blank(readField(el)),entry.label+': clearing did not confirm.');
+    changeJournal.splice(changeJournal.indexOf(entry),1);
+  }
+
   const host=document.createElement('div');
-  host.id='it-a15-helper-host'; host.style.cssText='position:fixed;right:16px;top:64px;z-index:2147483645';
+  host.id='it-a15-helper-host';
+  host.style.cssText='position:fixed;right:16px;top:60px;z-index:2147483645';
   const root=host.attachShadow({mode:'open'});
-  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.10</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="timeline">Read timeline</button><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><hr><p><strong>Add four procedures</strong>: Assessment -ALS; Neurological assessment; Adult pain assessment; Moving a patient to a stretcher.</p><p class="meta">Start on Procedures &amp; Medications with an empty procedure list, or a blank Procedure entry. Opens Add automatically, then uses Add Another and OK. Sets role to Paramedic on all four; stretcher time to Depart Scene minus 2 minutes; fallback Arrived on Scene plus 2 minutes. First open Timeline and click Read timeline; then return here. Review other times and clinical details afterward.</p><label><input id="procack" type="checkbox"> These four procedures were performed, are missing from this chart, and I want to add them with Paramedic role and the stated stretcher time.</label><p><button id="procrun" disabled>Add four procedures</button></p><p class="meta">No automatic chart Save/submit. Procedure timing and ETCO2 clearing remain manual.</p><button id="clearlog" type="button">Clear log</button> <button id="resettest" type="button">Reset procedure test</button><div id="log"></div></section>`;
+  root.innerHTML='<style>'+
+    ':host{font:13px/1.4 system-ui;color:#182a3d}*{box-sizing:border-box}button{font:inherit;cursor:pointer;padding:8px 11px;border:1px solid #a7b4c0;border-radius:7px;background:#fff;color:#182a3d}button:disabled{opacity:.48;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #2878b7;outline-offset:2px}#launch,#run{background:#165c88;color:white}section{width:430px;min-width:350px;max-width:94vw;max-height:83vh;overflow:auto;resize:horizontal;background:#fff;border:1px solid #a7b4c0;border-radius:12px;padding:14px;box-shadow:0 10px 30px #0004}header{display:flex;align-items:center;gap:8px;cursor:move}h2{font-size:17px;margin:0;flex:1}small,.meta{font-size:11px;color:#586b7a}nav{display:flex;gap:4px;margin:12px 0;flex-wrap:wrap}nav button{font-size:12px;padding:5px 8px}nav button[aria-selected=true]{background:#183f5b;color:white}.actions{display:flex;align-items:stretch;gap:7px;margin:10px 0}#scan{flex:1;font-weight:700;font-size:15px;padding:12px}#timeline{margin-left:auto;min-width:110px}button[data-state=pending]{background:#ffdf80;color:#49370c}button[data-state=ready]{background:#bde6c7;color:#154424}button[data-state=error]{background:#f6b9b9;color:#721a1a}.row{display:flex;gap:8px;border-top:1px solid #e4e9ed;padding:9px 0}.row input{margin-top:4px}.ready{color:#195a30}.conflict,.manual{color:#8a5400}.blocked{color:#9c2323}#status{padding:9px;background:#edf3f7;border-radius:6px;margin:8px 0}#status[data-error=true]{background:#fce2df;color:#84221a}#log{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.5 ui-monospace,monospace;max-height:190px;overflow:auto;background:#f3f5f7;padding:8px}details{margin-top:12px}summary{cursor:pointer;font-weight:600}.danger{background:#b6252b;color:white;border-color:#a51c23}.footer{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.modal{position:fixed;inset:0;background:#071524ba;display:flex;align-items:center;justify-content:center;z-index:2147483647}.dialog{width:420px;max-width:92vw;max-height:88vh;overflow:auto;background:#fff6dc;border:3px solid #193d55;border-radius:16px;padding:18px;box-shadow:0 12px 50px #0008}.art{height:195px;overflow:hidden;margin:-18px -18px 15px;background:#193d55}.art img{width:100%;display:block;transform:translateY(-26px)}.dialog h3{font-size:20px;margin:8px 0}.dialog .footer{justify-content:space-between}.dialog button{font-size:15px;font-weight:700}#clearlist{max-height:260px;overflow:auto}[hidden]{display:none!important}'+
+    '</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.2.0</small></h2><button id="hide">Minimize</button></header>'+
+    '<nav aria-label="Helper sections"></nav><div id="context" class="meta"></div>'+
+    '<div class="actions"><button id="scan" data-state="pending">Scan this view</button><button id="timeline" data-state="pending">Read timeline</button></div>'+
+    '<button id="whole">Review whole chart</button><div id="status" role="status">Choose Routine A15, then review the proposed changes.</div>'+
+    '<div id="rows"></div><label id="acklabel"><input id="ack" type="checkbox"> These selections match the care provided. I reviewed the changes.</label>'+
+    '<div class="actions"><button id="run" disabled>Apply selected changes</button></div>'+
+    '<div id="cleararea" hidden><p>Clear selected values added by this helper since this page loaded. Existing answers and measured vital values are excluded. Open the relevant entry to make its fields available.</p><div id="clearlist"></div><button id="clearvalues" class="danger" disabled>Clear selected values</button></div>'+
+    '<details><summary>Log &amp; testing</summary><div class="footer"><button id="clearlog">Clear log</button><button id="resettest">Reset procedure test</button></div><div id="log"></div></details>'+
+    '<p class="meta">Chart Save/submit is never clicked. Missing controls and conflicts stay for review.</p></section>'+
+    '<div id="confirm" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="confirmtitle"><div class="dialog"><div class="art"><img id="artwork" alt="Retro vault mascot giving a thumbs-up beside a cartoon mushroom cloud"></div><h3 id="confirmtitle">Clear selected data?</h3><p>This will nuke the selected chart data. You good with that?</p><p id="clearsummary"></p><div class="footer"><button id="cancelclear">Cancel</button><button id="yesclear" class="danger">Yes, clear it</button></div></div></div>';
   document.body.append(host);
-  const $=s=>root.querySelector(s); let plan=[],busy=false,planUrl='';
-  const log=t=>{$('#log').textContent+=`${t}\n`;};
-  function invalidate(){plan=[];planUrl='';$('#rows').textContent='';$('#ack').checked=false;$('#run').disabled=true;}
-  function render(items){$('#rows').textContent='';for(const item of items){const row=document.createElement('div');row.className='row';const cb=document.createElement('input');cb.type='checkbox';cb.checked=item.status==='ready';cb.disabled=item.status!=='ready';item.check=cb;const body=document.createElement('div');const title=document.createElement('div');title.className=item.status;title.textContent=`${item.rule.label} -> ${item.rule.target}`;const meta=document.createElement('div');meta.className='meta';const cur=Array.isArray(item.before)?item.before.join(', '):norm(item.before);meta.textContent=`${item.status.toUpperCase()} | current: ${cur||'(blank)'}${item.rule.derived?` | ${item.rule.derived}`:''}${item.note?` | ${item.note}`:''}`;body.append(title,meta);row.append(cb,body);$('#rows').append(row);}}
+  const $=s=>root.querySelector(s);
+  let plan=[],busy=false,planKey='',tab=sectionKind(),lastPanel=panelName(),lastChart=timelineChartKey();
+  let timelineState='pending', scanState='pending', clearSelection=[],confirmResolve=null;
+  const tabs=['Chart','Treatment','Vitals','Transport','Delays','Clear'];
+  const log=t=>{const el=$('#log');el.textContent+=t+'\n';el.scrollTop=el.scrollHeight;};
+  function status(text,error=false){$('#status').textContent=text;$('#status').dataset.error=String(error);log(text);}
+  function invalidate(){plan=[];planKey='';scanState='pending';$('#rows').replaceChildren();$('#ack').checked=false;updateUI();}
+  function updateUI(){
+    $('#scan').dataset.state=scanState;$('#timeline').dataset.state=timelineState;
+    $('#timeline').textContent=timelineState==='ready'?'Timeline ready':timelineState==='error'?'Timeline error':'Read timeline';
+    $('#context').textContent=(panelName()||'Current chart')+' · '+tab;
+    $('#cleararea').hidden=tab!=='Clear';
+    $('#scan').hidden=tab==='Clear';$('#rows').hidden=tab==='Clear';$('#acklabel').hidden=tab==='Clear';$('#run').hidden=tab==='Clear';
+    $('#whole').hidden=tab!=='Chart';
+    for(const b of root.querySelectorAll('nav button')){b.setAttribute('aria-selected',String(b.textContent===tab));b.disabled=busy;}
+    for(const id of ['scan','timeline','whole','resettest','ack'])$('#'+id).disabled=busy;
+    $('#run').disabled=busy||!$('#ack').checked||!plan.some(x=>x.selected&&x.status==='ready');
+    $('#clearvalues').disabled=busy||!clearSelection.some(x=>x.selected&&clearCandidate(x.entry));
+  }
+  function row(label,detail,state,checked,onchange,scope=$('#rows')){
+    const div=document.createElement('div');div.className='row';
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=checked;cb.disabled=state!=='ready';
+    cb.onchange=()=>{onchange(cb.checked);updateUI();};
+    const body=document.createElement('div'), title=document.createElement('div'),meta=document.createElement('div');
+    title.className=state;title.textContent=label;meta.className='meta';meta.textContent=detail;body.append(title,meta);div.append(cb,body);scope.append(div);
+  }
+  function render(){
+    $('#rows').replaceChildren();
+    for(const item of plan){
+      item.selected=item.selected??(item.status==='ready'&&item.kind!=='bundle');
+      const label=item.kind==='bundle'?'Add four routine procedures':item.kind==='vitalset'?'Vital set '+(item.index+1):item.rule.label+' → '+(Array.isArray(item.rule.target)?item.rule.target.join(' + '):item.rule.target);
+      let detail=item.note||((item.section?item.section+' · ':'')+item.status.toUpperCase()+' · Current: '+(listValue(item.before).join(', ')||'(blank)')+(item.rule.derived?' · '+item.rule.derived:''));
+      if(item.kind==='vitalset')detail=item.items.filter(i=>i.status==='ready').length+' metadata changes; '+item.items.filter(i=>i.status==='conflict').length+' conflicts preserved. Measured values untouched.';
+      row(label,detail,item.status,item.selected,v=>item.selected=v);
+      if(item.kind==='vitalset')for(const child of item.items) {
+        const meta=document.createElement('div');meta.className='meta';meta.style.margin='0 0 4px 26px';
+        meta.textContent=child.rule.label+': '+(listValue(child.before).join(', ')||'(blank)')+' → '+child.rule.target+' ['+child.status+']';$('#rows').append(meta);
+      }
+    }
+    scanState='ready';$('#ack').checked=false;updateUI();
+  }
+  function refreshClear(){
+    $('#clearlist').replaceChildren();
+    clearSelection=changeJournal.filter(e=>e.key===timelineChartKey()).map(entry=>({entry,selected:clearCandidate(entry)}));
+    for(const item of clearSelection)row(item.entry.label,listValue(item.entry.after).join(', ')+(clearCandidate(item.entry)?'':' · Open original entry; changed values are preserved'),clearCandidate(item.entry)?'ready':'blocked',item.selected,v=>item.selected=v,$('#clearlist'));
+    if(!clearSelection.length)$('#clearlist').textContent='No helper-added values are available to clear in this run.';
+    updateUI();
+  }
+  for(const name of tabs){
+    const b=document.createElement('button');b.textContent=name;b.setAttribute('role','tab');
+    b.onclick=async()=>{
+      if(busy)return;
+      if(name==='Clear'){tab=name;refreshClear();return;}
+      const target={'Treatment':'Procedures & Medications','Vitals':'Vital Signs','Transport':'Transport Info','Delays':'Delays'}[name];
+      if(target&&sectionKind()!==name){
+        await task(async()=>{await ensureSection(target);tab=name;invalidate();status('Opened '+target+'.');});
+      }else {tab=name;updateUI();}
+    };
+    root.querySelector('nav').append(b);
+  }
+  async function task(fn){
+    if(busy)return;
+    busy=true;updateUI();
+    try{await fn();}
+    catch(e){status(e.message,true);}
+    finally{busy=false;lastPanel=panelName();lastChart=timelineChartKey();updateUI();}
+  }
+  async function prepareTimeline(force=false) {
+    if(!force&&timelineSnapshot&&timelineSnapshot.key===timelineChartKey()&&Date.now()-timelineSnapshot.captured<15*60000){timelineState='ready';return;}
+    try{await automaticTimeline();timelineState='ready';}
+    catch(e){timelineSnapshot=null;timelineState='error';throw e;}
+  }
+  function bundleItem(){
+    if(sectionKind()!=='Treatment')return null;
+    try{
+      const timing={arrival:patientArrivalTime(),stretcher:stretcherTime()};
+      const fly=[...document.querySelectorAll('.grid-flyout-active')].filter(visible);
+      if(fly.length&&!blank(readField(procedureField(procedureFlyout()))))return null;
+      if(!fly.length){
+        const g=namedGrid('Procedures'), list=g?.querySelector('.grid-item-display');
+        if(!g||!list)return null;
+        if(list.children.length)return {kind:'bundle',status:'manual',note:'Existing procedures found. Review them individually to avoid duplicates.'};
+      }
+      return {kind:'bundle',status:'ready',note:'Select only if all four were performed and are missing. Assessments: '+timing.arrival.date+' '+timing.arrival.time+'. Stretcher: '+timing.stretcher.date+' '+timing.stretcher.time+'. Paramedic role.',timing};
+    }catch(e){return {kind:'bundle',status:'blocked',note:e.message};}
+  }
+  async function scanCurrent(){
+    invalidate();const section=panelName();
+    try{await prepareTimeline();}catch(e){log('Timeline pending: '+e.message);}
+    if(sectionKind()==='Vitals'&&!document.querySelector('.grid-flyout-active')){
+      plan=(await reviewVitals()).map(x=>({...x,kind:'vitalset',section,status:x.items.some(i=>i.status==='ready')?'ready':'kept'}));
+    }else{
+      plan=buildPlan().map(x=>({...x,section}));
+      const bundle=bundleItem();if(bundle)plan.push({...bundle,section});
+    }
+    planKey=timelineChartKey();render();status('Review ready: '+plan.filter(x=>x.status==='ready').length+' actions; '+plan.filter(x=>['blocked','manual','conflict'].includes(x.status)).length+' need attention.');
+  }
+  async function scanWhole(){
+    invalidate();const origin=panelName(), all=[];
+    try{await prepareTimeline();}catch(e){all.push({rule:{label:'Timeline',target:'read required'},status:'blocked',note:e.message});}
+    for(const section of ['STAT Info','Dispatch','History','Vital Signs','Procedures & Medications','Transport Info','Delays']){
+      try{
+        await ensureSection(section);
+        if(section==='Vital Signs'){
+          const sets=await reviewVitals();all.push(...sets.map(x=>({...x,kind:'vitalset',section,status:x.items.some(i=>i.status==='ready')?'ready':'kept'})));
+        }else{
+          all.push(...buildPlan().map(x=>({...x,section,el:null,rule:{...x.rule,element:undefined}})));
+          if(section==='Procedures & Medications'){const b=bundleItem();if(b)all.push({...b,section});}
+        }
+      }catch(e){all.push({rule:{label:section,target:'manual review'},section,status:'blocked',note:e.message});}
+    }
+    if(origin)try{await ensureSection(origin);}catch(e){log(e.message);}
+    plan=all;planKey=timelineChartKey();tab='Chart';render();status('Chart review ready. Unavailable sections are listed for attention; no values have been applied.');
+  }
+  async function applyPlan(){
+    if(planKey!==timelineChartKey())throw new Error('Chart changed. Scan again.');
+    const selected=plan.filter(x=>x.selected&&x.status==='ready'), origin=panelName();
+    let count=0;
+    for(const item of selected){
+      if(planKey!==timelineChartKey())throw new Error('Chart changed during apply.');
+      if(item.section&&panelName()!==item.section)await ensureSection(item.section);
+      if(item.kind==='bundle'){
+        const current={arrival:patientArrivalTime(),stretcher:stretcherTime()};
+        if(JSON.stringify(current)!==JSON.stringify(item.timing))throw new Error('Procedure timeline changed since review.');
+        await addProcedureBundle(name=>log('Added: '+name));
+      }else if(item.kind==='vitalset')await applyVitalSet(item);
+      else {
+        const el=item.rule.action==='activation'?namedGrid('Hospital Team Activations'):oneVisibleById(item.rule.id);
+        if(!el)throw new Error('Reviewed field disappeared: '+item.rule.label);
+        await apply({...item,el});
+      }
+      count++;item.status='kept';item.selected=false;
+    }
+    if(origin&&panelName()!==origin)try{await ensureSection(origin);}catch(e){log(e.message);}
+    invalidate();status('Applied '+count+' reviewed actions. Inspect the chart before saving.');
+  }
+  $('#scan').onclick=()=>task(async()=>{try{await scanCurrent();}catch(e){scanState='error';throw e;}});
+  $('#whole').onclick=()=>task(scanWhole);
+  $('#timeline').onclick=()=>task(async()=>{invalidate();await prepareTimeline(true);status('Timeline read and previous view restored. Ready for review.');});
+  $('#ack').onchange=updateUI;
+  $('#run').onclick=()=>{if($('#ack').checked)task(applyPlan);};
   $('#clearlog').onclick=()=>{$('#log').textContent='';};
   $('#resettest').onclick=()=>{
-    if(busy){log('Wait for the current run to finish before resetting.');return;}
-    const chart=location.hash.match(/\/Incident\d+\/Form42(?=$|[/?])/);
-    if(!chart){log('Open a Form42 chart before resetting.');return;}
-    if(!window.confirm('Reset testing for this chart? This clears the log and allows the procedure bundle to run again. It does not delete any procedures. Remove entries from the previous test first to avoid duplicates.'))return;
-    const prefix='it-a15-procedure-bundle:';
-    for(const key of Object.keys(sessionStorage)){
-      if(!key.startsWith(prefix))continue;
-      try {
-        const stored=new URL(key.slice(prefix.length));
-        const match=stored.hash.match(/\/Incident\d+\/Form42(?=$|[/?])/);
-        if(stored.origin===location.origin && stored.pathname===location.pathname && match?.[0]===chart[0])sessionStorage.removeItem(key);
-      }catch(_){/* Leave unrelated or unrecognized keys intact. */}
-    }
-    invalidate();
-    $('#procack').checked=false;
-    $('#procrun').disabled=true;
-    $('#log').textContent='';
-  };
-
-  $('#timeline').onclick=()=>{
     if(busy)return;
-    invalidate();
-    try {const t=stretcherTime(true); log('Timeline read for this chart. Stretcher time: '+t.date+' '+t.time+'. Return to Procedures. Valid for 15 minutes; read again after timeline edits.');}
-    catch(e){log('Timeline: '+e.message);}
+    if(!timelineChartKey())return;
+    if(!window.confirm('Reset procedure testing for this chart? Remove previous test entries first. This clears the log and retry lock, not chart entries.'))return;
+    for(const key of Object.keys(sessionStorage)){
+      if(!key.startsWith('it-a15-procedure-bundle:'))continue;
+      try{const u=new URL(key.slice('it-a15-procedure-bundle:'.length));if(u.origin===location.origin&&u.pathname===location.pathname&&u.hash.split('?')[0]===location.hash.split('?')[0])sessionStorage.removeItem(key);}catch(_){}
+    }
+    invalidate();$('#log').textContent='';status('Procedure test reset. Review before retrying.');
   };
-  $('#procack').onchange=()=>{$('#procrun').disabled=busy||!$('#procack').checked;};
-  $('#procrun').onclick=async()=>{
-    if(busy||!$('#procack').checked)return;
-    busy=true; invalidate(); $('#scan').disabled=true; $('#procrun').disabled=true; $('#procack').disabled=true;
-    try {
-      await addProcedureBundle(name=>log('Procedure entered: '+name));
-      log('Four procedure selections entered and flyout closed. Review the procedure list, dates/times, and details. Chart Save was not clicked.');
-    } catch(e) { log('Procedure bundle STOPPED: '+e.message); log('Earlier entries may remain. Review the procedure list and open entry.'); }
-    finally { busy=false; $('#scan').disabled=false; $('#procack').disabled=false; $('#procack').checked=false; $('#procrun').disabled=true; }
+  try{$('#artwork').src=typeof GM_getResourceURL==='function'?GM_getResourceURL('clearArtwork'):'';}catch(_){$('#artwork').hidden=true;}
+  function secondWarning(count){
+    $('#clearsummary').textContent=count+' selected helper-added values will be cleared. Chart entries themselves will not be deleted.';
+    $('#confirm').hidden=false;$('#cancelclear').focus();
+    return new Promise(resolve=>confirmResolve=resolve);
+  }
+  function dismissClear(value){$('#confirm').hidden=true;const resolve=confirmResolve;confirmResolve=null;if(resolve)resolve(value);}
+  $('#cancelclear').onclick=()=>dismissClear(false);$('#yesclear').onclick=()=>dismissClear(true);
+  $('#confirm').onkeydown=e=>{
+    if(e.key==='Escape'){e.preventDefault();dismissClear(false);}
+    if(e.key==='Tab'){e.preventDefault();(root.activeElement===$('#cancelclear')?$('#yesclear'):$('#cancelclear')).focus();}
   };
-  $('#launch').onclick=()=>{$('section').hidden=false;$('#launch').hidden=true;}; $('#hide').onclick=()=>{$('section').hidden=true;$('#launch').hidden=false;};
-  $('#ack').onchange=()=>{$('#run').disabled=busy||!plan.length||!$('#ack').checked||!plan.some(x=>x.status==='ready'&&x.check?.checked);}; window.addEventListener('hashchange',invalidate);
-  $('#scan').onclick=()=>{invalidate();$('#log').textContent='';try{if(!/\/Incident\d+\/Form42(?:$|[/?])/.test(location.hash))throw new Error('Open an ImageTrend Form42 incident chart.');plan=buildPlan();planUrl=location.href;render(plan);const r=plan.filter(x=>x.status==='ready').length,c=plan.filter(x=>x.status==='conflict').length,m=plan.filter(x=>x.status==='manual'||x.status==='blocked').length;log(`Found ${plan.length} recognized A15 fields: ${r} ready; ${c} conflicts; ${m} manual/blocked.`);}catch(e){log(`Scan stopped: ${e.message}`);}};
-  $('#run').onclick=async()=>{if(busy||!plan.length||!$('#ack').checked)return;if(location.href!==planUrl){log('Stopped: chart/view changed. Scan again.');invalidate();return;}busy=true;$('#scan').disabled=true;$('#run').disabled=true;$('#ack').disabled=true;let changed=0;try{for(const item of plan.filter(x=>x.status==='ready'&&x.check?.checked)){if(location.href!==planUrl)throw new Error('Chart/view changed during run.');await apply(item);changed++;log(`Set: ${item.rule.label} -> ${item.rule.target}`);await sleep(180);}log(`Complete: ${changed} field(s) changed. Review the chart. Save was not clicked.`);}catch(e){log(`STOPPED after ${changed} confirmed change(s): ${e.message}`);log('Earlier changes remain; inspect this chart before continuing.');}finally{busy=false;$('#scan').disabled=false;$('#ack').disabled=false;invalidate();}};
+  $('#clearvalues').onclick=()=>task(async()=>{
+    const chosen=clearSelection.filter(x=>x.selected).map(x=>x.entry), chart=timelineChartKey();
+    if(!chosen.length)return;
+    if(!window.confirm('Clear these helper-added values?\n\n'+chosen.map(e=>e.label+' = '+listValue(e.after).join(', ')).join('\n')))return;
+    if(!await secondWarning(chosen.length))return;
+    if(chart!==timelineChartKey())throw new Error('Chart changed. Nothing cleared.');
+    for(const entry of chosen)await clearAddedValue(entry);
+    refreshClear();invalidate();status('Cleared '+chosen.length+' selected helper-added values.');
+  });
+  $('#launch').onclick=()=>{$('section').hidden=false;$('#launch').hidden=true;};
+  $('#hide').onclick=()=>{$('section').hidden=true;$('#launch').hidden=false;};
+  let drag=null;
+  root.querySelector('header').onpointerdown=e=>{
+    if(e.target.closest('button'))return;
+    const rect=host.getBoundingClientRect();drag={x:e.clientX-rect.left,y:e.clientY-rect.top};e.target.setPointerCapture(e.pointerId);
+  };
+  root.querySelector('header').onpointermove=e=>{
+    if(!drag)return;host.style.right='auto';host.style.left=Math.max(0,Math.min(innerWidth-350,e.clientX-drag.x))+'px';host.style.top=Math.max(0,Math.min(innerHeight-50,e.clientY-drag.y))+'px';
+  };
+  root.querySelector('header').onpointerup=()=>drag=null;
+  document.addEventListener('input',e=>{if(!busy&&!e.composedPath().includes(host)){invalidate();timelineState=timelineSnapshot?'ready':'pending';}},true);
+  document.addEventListener('change',e=>{if(!busy&&!e.composedPath().includes(host))invalidate();},true);
+  setInterval(()=>{
+    if(busy)return;
+    const current=panelName(), chart=timelineChartKey();
+    if(chart!==lastChart||current!==lastPanel){
+      lastChart=chart;lastPanel=current;tab=sectionKind();invalidate();
+      if(chart!==planKey)$('#clearlist').replaceChildren();
+    }
+    if(!timelineSnapshot||Date.now()-timelineSnapshot.captured>15*60000){if(timelineState==='ready')timelineState='pending';}
+    if(plan.some(x=>x.el&&(!x.el.isConnected||!unchanged(readField(x.el),x.before))))invalidate();
+    updateUI();
+  },700);
+  updateUI();
+
 })();

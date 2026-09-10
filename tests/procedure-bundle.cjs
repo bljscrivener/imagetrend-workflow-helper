@@ -24,6 +24,10 @@ const { chromium } = require('playwright');
         const fly=form.querySelector('.grid-flyout-overlay');
         fly.insertAdjacentHTML('beforeend','<input id="entry'+serial+'25443Time" value="20:00:00"><div class="single-row-control" id="d0c37cfb-ac96-5c0e-9eb6-d21aeb3f57d7"><div class="koSingleselect-selectedItem-value">Critical Care Paramedic</div><div class="koSingleselect-dropDownItem">Paramedic</div></div>');
         const role=fly.querySelector('[id="d0c37cfb-ac96-5c0e-9eb6-d21aeb3f57d7"]');
+        for(const [id,label] of [['c07c1d8b-c7d4-5a5a-8ec1-01bf67f882e0','No'],['6a3cd763-c562-574c-b209-bbced74d73c1','Protocol (Standing Order)'],['adcc71b8-0b92-5387-8b9f-cb94b729e4ac','Yes']]){
+          const control=document.createElement('div');control.className='smart-list-control';control.id=id;
+          const button=document.createElement('button');button.className='smart-list-item';button.textContent=label;button.onclick=()=>button.classList.add('selected');control.append(button);fly.append(control);
+        }
         role.querySelector('.koSingleselect-dropDownItem').onclick=()=>role.querySelector('.koSingleselect-selectedItem-value').textContent='Paramedic';
         if(mode==='norole')role.remove();
         if(mode==='badtime')form.querySelector('[id="29337Time"]').value='12:01:00';
@@ -84,6 +88,8 @@ const { chromium } = require('playwright');
     if(success)assert.deepEqual(result.commits,['Assessment -ALS','Neurological assessment','Adult pain assessment','Moving a patient to a stretcher']);
     if(success) {
       assert.ok(result.details.every(d=>!d.role.includes('Critical')));
+      assert.ok(result.details.slice(0,3).every(d=>d.time===(result.mode==='midnight'?'23:50:00':'12:00:00')));
+      assert.ok(result.details.slice(0,3).every(d=>d.date===(result.mode==='midnight'?'09/08/2026':'09/09/2026')));
       assert.equal(result.details[3].time,result.mode==='midnight'?'23:59:00':'12:08:00');
       assert.equal(result.details[3].date,result.mode==='midnight'?'09/08/2026':'09/09/2026');
     }
