@@ -38,3 +38,8 @@ Failures and conflicts appear in a chart-scoped Needs attention log with links t
 Live inspection found validation-exclamation siblings being mistaken for vital cards. These are excluded; regression coverage uses the captured openGridItemAndCloseAllSiblings handler beside a warning sibling. Individual metadata failures are recorded while other approved fields continue. An entry already open at apply start no longer triggers the partial-new-entry stop.
 
 Eligible procedure bundles are preselected and placed first, with review acknowledgment still required. Prior-attempt locks remain respected. Scan this view is small and neutral. Attention starts collapsed and the review list has a minimum height. Full dispatch reset and automatic ETCO2-unit clearing remain deferred.
+
+## Native test release 0.2.4.1
+
+Separate [A15 Native Test script](src/imagetrend-a15-native-test.user.js) and [testing guide](docs/a15-native-test.md). Reviews mapped defaults without visiting their pages. This experimental build does not yet include the stable procedure, vitals, timeline, or clear workflows.
+
