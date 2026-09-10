@@ -157,3 +157,9 @@ Fixes the repeated unavailable 29337Date error: timeline fields are read across 
 Visible fields take precedence over hidden copies. Incomplete/ambiguous live fields, invalid times, chronology errors, observed timeline edits, chart changes, and expiration prevent stale fallback. Read timeline again after changing source times. No chart data is persisted to browser storage by this cache.
 
 Syntax check, seven timeline tests and twelve procedure regression scenarios passed. Tests cover fields outside the form, unmounted timeline reuse, chart isolation, edit invalidation, blank values clearing the cache, and expiry. Live v0.1.6 validation pending.
+
+## v0.1.7 stretcher timing fallback
+
+Stretcher movement uses Depart Scene minus 2 minutes when a complete departure timestamp is available. If departure date/time is missing or blank, use Arrived on Scene (29335Date/Time) plus 2 minutes. This is scene arrival, not patient arrival. Invalid populated timestamps or ambiguous fields still block. If patient arrival is available, the computed time must not precede it. Read timeline captures the additional scene-arrival fields; both new bundle entries and reviewed existing-entry repairs use this rule. Missing both source timestamps blocks; dates roll across midnight correctly.
+
+Validation: syntax, twelve timeline scenarios and twelve procedure scenarios passed. Live validation pending.
