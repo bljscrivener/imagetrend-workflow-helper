@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ImageTrend A15 MVP helper
 // @namespace    local.imagetrend.workflow
-// @version      0.1.4
+// @version      0.1.5
 // @description  Review/apply vetted routine A15 ImageTrend defaults on the currently open form view. Never saves/submits.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
 // @grant        none
@@ -255,6 +255,10 @@
     const proc = oneVisibleById('02dffd5f-4c68-506b-881d-5b00c78090aa');
     if (proc) {
       const name = norm(readField(proc));
+      if (name === 'Moving a patient to a stretcher') {
+        const timing = stretcherTime(), fields = procedureTimeInputs(procedureFlyout());
+        for (const part of ['date','time']) out.push({element:fields[part],id:fields[part].id,label:'Stretcher procedure '+part,target:timing[part],input:true,mode:'procedureTime',derived:'Unit Left Scene minus 2 minutes; replaces current timestamp after review'});
+      }
       const size = [...document.querySelectorAll(`${FORM} input[id$="25451"]`)].filter(visible);
       const comment = oneVisibleById('25450');
       const age = currentAgeYears();
@@ -271,6 +275,7 @@
     if (rule.input && isProtectedNumericId(el.id)) return {rule,el,status:'blocked',before:readField(el),note:'Protected clinical numeric field'};
     const before = readField(el);
     if (same(before,rule.target)) return {rule,el,status:'kept',before};
+    if (rule.mode === 'procedureTime') return {rule,el,status:'ready',before,note:'Reviewed timestamp correction'};
     if (rule.mode === 'procedureRole') {
       if (blank(before) || norm(before)==='Critical Care Paramedic') return {rule,el,status:'ready',before,note:blank(before)?'':'Known correction: Critical Care Paramedic -> Paramedic'};
       return {rule,el,status:'conflict',before,note:'Existing value preserved'};
@@ -293,12 +298,64 @@
     const {rule,el,before}=item;
     if (!el || item.status!=='ready') return;
     if (rule.input) {
+      if (rule.mode === 'procedureTime') {
+        const timing = stretcherTime(), part = el.id.endsWith('Date') ? 'date' : 'time';
+        if (rule.target !== timing[part]) throw new Error('Timeline changed since review. Scan again.');
+      }
       if (!unchanged(readField(el),before)) throw new Error(`${rule.label}: changed since review.`);
       nativeSetInput(el,rule.target); await sleep(120);
       if (!same(readField(el),rule.target)) throw new Error(`${rule.label}: ImageTrend did not confirm input change.`);
     } else await setChoice(el,rule.target,before);
   }
 
+
+
+  function stretcherTime() {
+    function timeline(id) {
+      const nodes = allById(id);
+      if (nodes.length !== 1) throw new Error('Timeline field ' + id + ' unavailable or ambiguous. Open the timeline so its fields are loaded.');
+      return nodes[0].value;
+    }
+    const read = prefix => {
+      const d = timeline(prefix + 'Date'), t = timeline(prefix + 'Time');
+      const parsed = parseDT(d, t);
+      if (!parsed || fmtDate(parsed) !== norm(d) || !/^(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(norm(t)))
+        throw new Error('Invalid timeline date/time for ' + prefix + '.');
+      return parsed;
+    };
+    const departure = read('29337'), contact = read('29336');
+    const target = new Date(departure.getTime() - 120000);
+    if (target < contact) throw new Error('Transport minus 2 minutes precedes patient arrival. Review the timeline.');
+    return {date: fmtDate(target), time: fmtTime(target)};
+  }
+  function procedureTimeInputs(f) {
+    const one = suffix => {
+      const nodes = [...f.querySelectorAll('input[id$="' + suffix + '"]')].filter(visible);
+      if (nodes.length !== 1 || nodes[0].disabled || nodes[0].readOnly) throw new Error('Writable procedure time fields unavailable.');
+      return nodes[0];
+    };
+    return {date: one('25443Date'), time: one('25443Time')};
+  }
+  async function applyBundleDetails(f, name, timing) {
+    const roles = [...f.querySelectorAll('[id="d0c37cfb-ac96-5c0e-9eb6-d21aeb3f57d7"]')].filter(visible);
+    if (roles.length !== 1) throw new Error('Procedure role missing or ambiguous.');
+    const role = roles[0], before = readField(role);
+    if (!same(before, 'Paramedic')) {
+      if (!blank(before) && !same(before, 'Critical Care Paramedic')) throw new Error('Unexpected procedure role; existing value preserved.');
+      await setChoice(role, 'Paramedic', before);
+    }
+    if (name === 'Moving a patient to a stretcher') {
+      const currentTiming = stretcherTime();
+      if (JSON.stringify(currentTiming) !== JSON.stringify(timing)) throw new Error('Timeline changed during bundle.');
+      const inputs = procedureTimeInputs(f);
+      nativeSetInput(inputs.date, timing.date);
+      nativeSetInput(inputs.time, timing.time);
+      await sleep(150);
+      if (norm(inputs.date.value) !== timing.date || norm(inputs.time.value) !== timing.time)
+        throw new Error('ImageTrend did not confirm stretcher time.');
+    }
+    if (!same(readField(role), 'Paramedic')) throw new Error('ImageTrend did not retain Paramedic.');
+  }
 
   const PROCEDURE_NAMES = ['Assessment -ALS', 'Neurological assessment', 'Adult pain assessment', 'Moving a patient to a stretcher'];
   const PROCEDURE_ID = '02dffd5f-4c68-506b-881d-5b00c78090aa';
@@ -332,6 +389,7 @@
     let f = procedureFlyout();
     if (!blank(readField(procedureField(f)))) throw new Error('The open procedure is populated. Open a blank entry first.');
     procedureKey(f);
+    const timing = stretcherTime();
     procedureButton(f, 'addAnotherButtonClickHandler', 'Add Another');
     procedureButton(f, 'okButtonClickHandler', 'OK');
     // Persist before the first mutation: failed/partial runs must not be blindly repeated.
@@ -356,6 +414,8 @@
       await setChoice(field, PROCEDURE_NAMES[i], readField(field));
       if (location.href !== url || procedureFlyout() !== f || procedureKey(f) !== key ||
           !same(readField(field), PROCEDURE_NAMES[i])) throw new Error('Procedure changed before confirmation.');
+      await applyBundleDetails(f, PROCEDURE_NAMES[i], timing);
+      if (location.href !== url || procedureFlyout() !== f || procedureKey(f) !== key || !same(readField(field), PROCEDURE_NAMES[i])) throw new Error('Procedure changed before acceptance.');
       const last = i === PROCEDURE_NAMES.length - 1;
       procedureButton(f, last ? 'okButtonClickHandler' : 'addAnotherButtonClickHandler', last ? 'OK' : 'Add Another').click();
       const deadline = Date.now() + 5000;
@@ -381,7 +441,7 @@
   const host=document.createElement('div');
   host.id='it-a15-helper-host'; host.style.cssText='position:fixed;right:16px;top:64px;z-index:2147483645';
   const root=host.attachShadow({mode:'open'});
-  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.4</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><hr><p><strong>Add four procedures</strong>: Assessment -ALS; Neurological assessment; Adult pain assessment; Moving a patient to a stretcher.</p><p class="meta">Start with a blank Procedure entry open. Uses Add Another and OK. Review dates, times and clinical details afterward.</p><label><input id="procack" type="checkbox"> These four procedures were performed, are missing from this chart, and I want to add them.</label><p><button id="procrun" disabled>Add four procedures</button></p><p class="meta">No automatic chart Save/submit. Procedure timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
+  root.innerHTML=`<style>:host{font:13px system-ui;color:#162637}*{box-sizing:border-box}button{font:inherit;border:1px solid #9eacbb;border-radius:7px;padding:8px 11px;background:white;color:#162637;cursor:pointer}button:disabled{opacity:.5}#launch,#run{background:#164f78;color:white}section{width:min(540px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #9eacbb;border-radius:12px;box-shadow:0 10px 34px #0004;padding:16px}header{display:flex;justify-content:space-between;align-items:center}h2{margin:0}.actions{display:flex;gap:8px;margin:10px 0}.row{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-top:1px solid #e4e9ef}.meta{font-size:11px;color:#5a6878}.ready{color:#155c2b}.kept{color:#4d6073}.conflict{color:#8a4d00}.blocked,.manual{color:#8b1e1e}#log{font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;background:#f5f7f9;padding:8px;border-radius:6px}[hidden]{display:none!important}</style><button id="launch">A15 helper</button><section hidden><header><h2>Routine A15 <small>v0.1.5</small></h2><button id="hide">Minimize</button></header><p>Scans this open ImageTrend view only. Conflicts are preserved. Measured clinical numbers are never written.</p><div class="actions"><button id="scan">Scan this view</button><button id="run" disabled>Apply reviewed fields</button></div><label><input id="ack" type="checkbox"> I reviewed the proposed changes for this chart.</label><div id="rows"></div><hr><p><strong>Add four procedures</strong>: Assessment -ALS; Neurological assessment; Adult pain assessment; Moving a patient to a stretcher.</p><p class="meta">Start with a blank Procedure entry open. Uses Add Another and OK. Sets role to Paramedic on all four; stretcher time to Unit Left Scene minus 2 minutes. Timeline fields must be loaded. Review other times and clinical details afterward.</p><label><input id="procack" type="checkbox"> These four procedures were performed, are missing from this chart, and I want to add them with Paramedic role and the stated stretcher time.</label><p><button id="procrun" disabled>Add four procedures</button></p><p class="meta">No automatic chart Save/submit. Procedure timing and ETCO2 clearing remain manual.</p><div id="log"></div></section>`;
   document.body.append(host);
   const $=s=>root.querySelector(s); let plan=[],busy=false,planUrl='';
   const log=t=>{$('#log').textContent+=`${t}\n`;};
