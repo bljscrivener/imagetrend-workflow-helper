@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         ImageTrend A15 Native Test (experimental)
 // @namespace    local.imagetrend.a15native
-// @version      0.2.4.2
+// @version      0.2.4.3
 // @description  Isolated, reviewed native preset field experiment. A15 defaults through native preset mappings; test release.
 // @match        https://pafford.imagetrendelite.com/Elite/Organizationpafford/Agencypmsmsboliv/EmsRunForm*
-// @updateURL    https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-native-test.user.js
-// @downloadURL  https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-native-test.user.js
+// @updateURL    https://raw.githubusercontent.com/bljscrivener/imagetrend-a15-native-test/main/imagetrend-a15-native-test.user.js
+// @downloadURL  https://raw.githubusercontent.com/bljscrivener/imagetrend-a15-native-test/main/imagetrend-a15-native-test.user.js
 // @grant        none
 // @run-at       document-idle
 // @noframes
@@ -18,7 +18,7 @@
   const host=document.createElement('div');host.id='it-a15-native-test';
   host.style.cssText='position:fixed;right:24px;top:90px;z-index:2147483646';
   const ui=host.attachShadow({mode:'open'});
-  ui.innerHTML='<style>:host{font:14px system-ui;color:#253144}section{background:white;border:2px solid #864ca3;border-radius:12px;padding:16px;width:440px;max-width:85vw;max-height:70vh;overflow:auto;box-shadow:0 8px 24px #0004}button,select{font:inherit;padding:8px;margin:5px 0}select{width:100%}pre{white-space:pre-wrap;font:12px system-ui;background:#f4edf8;padding:9px}label{display:block;margin:10px 0}h3{margin:0}small{display:block;margin:8px 0}button{cursor:pointer}#apply{background:#864ca3;color:white;border:0;border-radius:5px}button:disabled{opacity:.45}[hidden]{display:none!important}</style><button id="launch">A15 Native Test</button><section hidden><h3>A15 Native Test · experimental 0.2.4.2</h3><small>Use on your TEST chart. Native field updates may persist immediately. This does not call the preset audit or chart Save.</small><select id="choice"></select><button id="preview">Preview selected values</button><pre id="result">Review from any chart section. All mapped A15 defaults are selected; unavailable fields are listed for attention.</pre><label><input id="ack" type="checkbox">This is a TEST chart. All ready values match this scenario and I reviewed them.</label><button id="apply" disabled>Go, baby, go</button> <button id="hide">Minimize</button></section>';
+  ui.innerHTML='<style>:host{font:14px system-ui;color:#253144}section{background:white;border:2px solid #864ca3;border-radius:12px;padding:16px;width:440px;max-width:85vw;max-height:70vh;overflow:auto;box-shadow:0 8px 24px #0004}button,select{font:inherit;padding:8px;margin:5px 0}select{width:100%}pre{white-space:pre-wrap;font:12px system-ui;background:#f4edf8;padding:9px}label{display:block;margin:10px 0}h3{margin:0}small{display:block;margin:8px 0}button{cursor:pointer}#apply{background:#864ca3;color:white;border:0;border-radius:5px}button:disabled{opacity:.45}[hidden]{display:none!important}</style><button id="launch">A15 Native Test</button><section hidden><h3>A15 Native Test · experimental 0.2.4.3</h3><small>Use on your TEST chart. Native field updates may persist immediately. This does not call the preset audit or chart Save.</small><select id="choice"></select><button id="preview">Preview selected values</button><pre id="result">Review from any chart section. All mapped A15 defaults are selected; unavailable fields are listed for attention.</pre><label><input id="ack" type="checkbox">This is a TEST chart. All ready values match this scenario and I reviewed them.</label><button id="apply" disabled>Go, baby, go</button> <button id="hide">Minimize</button></section>';
   document.body.append(host);
   const $=s=>ui.querySelector(s);let reviewed=null,busy=false;
   for(const [i,c] of choices.entries()){const o=document.createElement('option');o.value=i;o.textContent=c.label;$('#choice').append(o);}
