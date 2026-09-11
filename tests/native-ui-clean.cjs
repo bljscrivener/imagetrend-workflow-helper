@@ -58,7 +58,8 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
    const old=ko.contextFor;window.nativeWrites=0;window.locked=false;
    window.dateFns={parse:x=>new Date(x),format:x=>x};imagetrend.helpers={isFire:()=>false,getISODateTimeFormat:()=>''};
    const source={ResponseTimeArrivedAtPatientModValue:{ArrivedAtPatient:'2026-09-09T11:00:00'},ResponseTimeUnitLeftSceneModValue:{UnitLeftScene:'2026-09-09T11:15:00'}};
-   const vm={focusedElement:()=> 'labDate',currentResponseTimesObject:()=>source,datePickerInputObservable:()=>'',setDateObj(d){nativeWrites++;document.getElementById('labDate').value='09/09/2026';document.getElementById('labTime').value=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')+':00';}};
+   const vm={focusedElement:()=> 'labTime',currentResponseTimesObject:()=>source,datePickerInputObservable:()=>'',setDateObj(d){nativeWrites++;document.getElementById('labDate').value='09/09/2026';document.getElementById('labTime').value=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')+':00';}};
+   document.getElementById('labDate').onclick=()=>{throw Error('Must reuse the open picker without clicking date again');};
    ko.isObservable=x=>typeof x==='function';ko.contextFor=n=>n.id==='date-picker'?{$data:vm}:n.id==='labDate'?{$root:{currentIncidentReadOnlyStatus:()=>locked},$parents:[model]}:old(n);
  });
  await page.locator('#labDate').focus();await host.getByRole('button',{name:'At Pt',exact:true}).click();
