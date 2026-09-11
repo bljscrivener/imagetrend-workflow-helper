@@ -1,3 +1,7 @@
+## Current native release: 0.2.4.14
+
+[Install / update Gremlin Logic](https://raw.githubusercontent.com/bljscrivener/imagetrend-a15-native-test/main/imagetrend-a15-native-test.user.js) · [Release notes](docs/release-0.2.4.14.md). The older workflow documentation below is retained as history.
+
 # ImageTrend Workflow Helper
 
 Routine A15 **v0.2.4** provides a tabbed, reviewed workflow for ImageTrend Elite.

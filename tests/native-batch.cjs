@@ -34,9 +34,9 @@ const fs=require('fs'),assert=require('node:assert/strict'),{chromium}=require('
  assert.equal(actual.Patient.Disposition.DispositionNumberOfPatientsTransportedModValue.NumberOfPatientsTransported,'1');
  assert.equal(actual.Patient.InterfacilityTransfer.AcceptingHospitalNotified,'code0');
  assert.equal(actual.TurnAroundDelays.length,2);assert.equal(actual.ResponseDelays.length,1);assert.equal(actual.SceneDelays.length,1);assert.equal(actual.ResponseTime.ReceivingHospitalContacted,'2026-09-09T11:25:00');assert.equal(actual.Patient.Disposition.HospitalTeamActivations.length,1);
- await h.getByRole('button',{name:'Tools',exact:true}).click();await h.locator('#advanced-tools summary').click();
+
  await page.locator('#fieldTime').focus();await h.getByRole('button',{name:'At Pt',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#fieldTime').value==='11:00:00');assert.equal(await page.locator('#fieldDate').inputValue(),'09/09/2026');
- await h.getByRole('button',{name:'Workflow',exact:true}).click();
+ await h.getByRole('button',{name:'Home',exact:true}).click();
  // Invalid departure cannot be silently replaced by the arrival fallback.
  await page.locator('[id="29337Time"]').fill('nonsense');const error=await page.evaluate(async()=>{await testAPI.readTimes();try{testAPI.procedureTiming('Moving a patient to a stretcher');return '';}catch(e){return e.message;}});assert.match(error,/Departure time is invalid/);
  // A prerequisite exposes a later resource; an earlier pending choice heals on the next pass.
@@ -55,7 +55,7 @@ const fs=require('fs'),assert=require('node:assert/strict'),{chromium}=require('
  // Clear requires both warnings and keeps the timeline while reporting incomplete scope.
  await h.getByRole('button',{name:'Tools',exact:true}).click();
  assert.equal(await h.locator('#apply').isVisible(),false);
- assert.equal(await h.locator('#copy-diagnostic-log').isVisible(),true);
+ assert.equal(await h.locator('#copy-diagnostic-log').isVisible(),false);
  await page.evaluate(()=>{for(const key of ['Vitals','PatientProcedures']){const list=model.Incident.Scene.Response.Patient[key];list.removeAll=()=>list.splice(0);}window.confirm=()=>true;});
  await h.locator('#clear-entries').click();await h.locator('#nuke-confirm').waitFor();assert.equal(await h.locator('.nuke-dialog svg').count(),1);await h.locator('#nuke-cancel').click();assert.equal(await page.evaluate(()=>model.Incident.Scene.Response.Patient.Disposition.DispositionNumberOfPatientsTransportedModValue.NumberOfPatientsTransported),'1');
  await h.locator('#clear-entries').click();await h.locator('#nuke-confirm').click();await page.waitForFunction(()=>document.querySelector('#it-a15-native-test').shadowRoot.querySelector('#result').textContent.includes('Cleared'));assert.equal(await page.locator('[id="29336Time"]').inputValue(),'11:00:00');assert.equal(await page.evaluate(()=>model.Incident.Scene.Response.Patient.Disposition.DispositionNumberOfPatientsTransportedModValue.NumberOfPatientsTransported),null);assert.equal(await h.locator('.confetti').count(),0,'partial coverage is not celebrated as full clear');
