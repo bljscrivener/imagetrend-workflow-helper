@@ -1,33 +1,49 @@
-# GL-SW-IMTR1 — ImageTrend Workflow Helper
+## Current native release: 0.2.4.14
 
-DOM-aware browser automation for repetitive ImageTrend Elite ePCR charting tasks.
+[Install / update Gremlin Logic](https://raw.githubusercontent.com/bljscrivener/imagetrend-a15-native-test/main/imagetrend-a15-native-test.user.js) · [Release notes](docs/release-0.2.4.14.md). The older workflow documentation below is retained as history.
 
-## Current state
+# ImageTrend Workflow Helper
 
-The project has moved from AutoHotkey/tab-count automation to a DOM-aware userscript architecture. The current STAT workflow helper targets known ImageTrend field containers, validates labels and expected choices, refuses to overwrite conflicting existing answers, requires explicit review acknowledgement, verifies changes after each action, and never clicks Save or submits the chart.
+Routine A15 **v0.2.4** provides a tabbed, reviewed workflow for ImageTrend Elite.
 
-## Current supported controls
+[Install the A15 userscript](https://raw.githubusercontent.com/bljscrivener/imagetrend-workflow-helper/a15-mvp/src/imagetrend-a15-helper.user.js) in Tampermonkey, then refresh ImageTrend. Install the full script so its warning artwork resource is included.
 
-- `button.smart-list-item`
-- `KOSINGLESELECT` / `.koSingleselect`
-- `.koSingleselect-down-button`
-- `.koSingleselect-dropDownItem`
-- `.koSingleselect-searchbar-input`
-- dedicated action buttons inside `#form-composer`
+See [v0.2.0 usage and limitations](docs/a15-v0.2.0.md) for the current workflow, timestamp rules, delay rules, and testing controls. [Earlier MVP notes](docs/a15-mvp.md) are retained as history.
 
-## Next milestone
+## Current workflow
 
-GRE-36: build a field reconnaissance command and registry that captures the active section, field container ID, label, control type, current value, valid choices, and useful IDs/classes across the major ePCR sections. The resulting registry will support reusable workflow profiles rather than tab-count macros.
+- Section-following tabs and local or chart-wide review before applying selected changes.
+- Four-procedure bundle with timeline-based timestamps and Paramedic role.
+- Vitals metadata review from the list, ECG Not Applicable, hospital activation No, and timeline-based delays.
+- Clear helper-added values with two confirmations; separate clear-log and reset-test controls.
 
-## Safety model
+Unknown fields, ambiguous controls, and changed values stop the relevant action. Measured vital numbers are not written. Chart Save/submit is never clicked; native procedure/vital entry buttons accept individual entries. Review any partial run before retrying.
 
-The helper is intentionally fail-closed:
+## Validation
 
-- does not overwrite a nonblank answer that differs from the reviewed workflow value
-- verifies field identity before acting
-- rechecks the chart state immediately before execution
-- stops on navigation or unexpected field changes
-- performs final verification
-- never clicks Save or submits
+Synthetic browser regression checks pass. Live ImageTrend validation is pending; navigation and grid handlers fail closed when unsupported. See the release notes for specific limits.
 
-ImageTrend may persist field edits as they are made, so any stopped run must be reviewed manually before continuing.
+With Node.js and Microsoft Edge installed, run `npm install`, `npm test`, and `npm run check`.
+
+## Updates
+
+v0.2.1 adds explicit update and download URLs pointing at a15-mvp. Install this version once if your existing installation has a missing or stale update address. Future Tampermonkey update checks use that branch. After updating, refresh ImageTrend to load the new version. Chart behavior is unchanged from v0.2.0.
+
+## v0.2.2
+
+Large Review whole chart and Go, baby, go controls, with a scrolling review list and Recon under Log & testing. Dropdowns wait for late options and support the selected-item opener. Missing options receive one retry after other approved fields; ambiguous or changed values stay for attention. Section navigation rechecks for a child after expanding a header. Delay targets now match the supplied menu choices exactly. Full dispatch-baseline reset remains deferred; current Clear behavior is unchanged. Live verification is still required.
+
+## v0.2.3 attention review
+
+Failures and conflicts appear in a chart-scoped Needs attention log with links to the section and a temporary field highlight. Links never apply values. Independent changes continue; an open partial entry pauses remaining work and labels unattempted actions. Clear log also clears this issue history. Missing or ambiguous navigation is reported without guessing another target.
+
+## v0.2.4 vitals and visibility
+
+Live inspection found validation-exclamation siblings being mistaken for vital cards. These are excluded; regression coverage uses the captured openGridItemAndCloseAllSiblings handler beside a warning sibling. Individual metadata failures are recorded while other approved fields continue. An entry already open at apply start no longer triggers the partial-new-entry stop.
+
+Eligible procedure bundles are preselected and placed first, with review acknowledgment still required. Prior-attempt locks remain respected. Scan this view is small and neutral. Attention starts collapsed and the review list has a minimum height. Full dispatch reset and automatic ETCO2-unit clearing remain deferred.
+
+## Native test release 0.2.4.1
+
+Separate [A15 Native Test script](src/imagetrend-a15-native-test.user.js) and [testing guide](docs/a15-native-test.md). Reviews mapped defaults without visiting their pages. This experimental build does not yet include the stable procedure, vitals, timeline, or clear workflows.
+
