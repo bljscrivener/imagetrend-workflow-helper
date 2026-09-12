@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gremlin Logic A15 Skin
 // @namespace    gremlin.logic.a15
-// @version      0.1.0
+// @version      0.2.0
 // @description  Interchangeable GUI skin for Gremlin Logic A15. Contains no charting mechanism.
 // @match        https://pafford.imagetrendelite.com/Elite/*
 // @grant        none
@@ -42,13 +42,15 @@
       .profile{max-width:130px;font-size:11px;line-height:1.1;text-align:center;padding:3px 7px;border-radius:999px;background:#fff;border:1px solid #aab9c7;box-shadow:0 2px 8px #0001;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .row{display:flex;gap:5px}
       .mini{border:1px solid #9fb0c0;background:#fff;color:#1c2e40;border-radius:8px;padding:5px 7px;font-size:11px;cursor:pointer;box-shadow:0 2px 7px #0001}
-      .panel{width:320px;max-height:48vh;overflow:auto;background:#fff;border:1px solid #9fb0c0;border-radius:12px;box-shadow:0 8px 28px #0004;padding:10px;display:none}
+      .mini:disabled{opacity:.55;cursor:default}
+      .panel{width:340px;max-height:52vh;overflow:auto;background:#fff;border:1px solid #9fb0c0;border-radius:12px;box-shadow:0 8px 28px #0004;padding:10px;display:none}
       .panel.open{display:block}
       .head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
       .title{font-size:13px;font-weight:700}
       .status{font-size:11px;color:#52697f}
       .log{font:11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f4f7fa;border:1px solid #d5dde5;border-radius:8px;padding:7px;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto}
       .settings-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center;font-size:11px}
+      .settings-actions{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;padding-top:9px;border-top:1px solid #dde4eb}
       .pill{font-size:10px;padding:2px 5px;border-radius:999px;background:#eef3f7}
       .err{color:#a11616}
       .ok{color:#176b34}
@@ -83,8 +85,16 @@
             <span>Skin</span><span class="pill">A15 default</span>
             <span>Mechanism</span><span id="mechanism">adapter only</span>
             <span>Profile</span><span id="profileDetail">—</span>
+            <span>Profiles stored</span><span id="profileCount">0</span>
             <span>Route</span><span id="route">—</span>
             <span>Safety</span><span id="safety">—</span>
+          </div>
+          <div class="settings-actions">
+            <button class="mini" id="migrateProfiles" type="button">Migrate profiles</button>
+            <button class="mini" id="exportProfiles" type="button">Copy profiles</button>
+            <button class="mini" id="exportData" type="button">Copy all data</button>
+            <button class="mini" id="importData" type="button">Import data</button>
+            <input id="importFile" type="file" accept="application/json,.json" hidden>
           </div>
         </div>
       </div>
@@ -101,6 +111,7 @@
   const logsView = $('#logsView');
   const settingsView = $('#settingsView');
   const panelTitle = $('#panelTitle');
+  const importFile = $('#importFile');
 
   let adapter = null;
   let mode = null;
@@ -135,6 +146,7 @@
       profile.textContent = 'profile: unavailable';
       $('#mechanism').textContent = 'adapter missing';
       $('#profileDetail').textContent = '—';
+      $('#profileCount').textContent = '0';
       $('#route').textContent = location.pathname;
       $('#safety').textContent = 'unknown';
       return;
@@ -143,6 +155,7 @@
     const profileName = s.activeProfileId || 'unknown';
     profile.textContent = `profile: ${profileName}`;
     $('#profileDetail').textContent = profileName;
+    $('#profileCount').textContent = String(adapter.getProfiles?.().length ?? 0);
     $('#route').textContent = s.route;
     const blocked = s.readOnly || s.saving || s.posting || s.offline || s.suspended;
     $('#safety').textContent = blocked ? (s.suspendReason || 'blocked') : 'ready';
@@ -154,6 +167,19 @@
   function flash(text, isError = false) {
     status.textContent = text;
     status.className = `status ${isError ? 'err' : ''}`;
+  }
+
+  async function guarded(button, work) {
+    if (!adapter) return;
+    button.disabled = true;
+    try {
+      await work();
+    } catch (error) {
+      flash(error?.message || 'operation failed', true);
+    } finally {
+      button.disabled = false;
+      refreshState();
+    }
   }
 
   $('#logs').addEventListener('click', () => setPanel('logs'));
@@ -188,6 +214,43 @@
     flash(`cleared ${count}`);
   });
 
+  $('#migrateProfiles').addEventListener('click', event => guarded(event.currentTarget, async () => {
+    const result = await adapter.migrateRuntimeProfiles();
+    flash(result.migrated ? `migrated ${result.migrated}` : 'no runtime profiles exposed', !result.migrated);
+  }));
+
+  $('#exportProfiles').addEventListener('click', event => guarded(event.currentTarget, async () => {
+    const bundle = await adapter.exportProfiles({ copy: true });
+    flash(`copied ${bundle.profiles.length} profiles`);
+  }));
+
+  $('#exportData').addEventListener('click', event => guarded(event.currentTarget, async () => {
+    const payload = await adapter.exportData({ copy: true, includeLogs: true });
+    flash(`copied data: ${payload.profileBundle.profiles.length} profiles`);
+  }));
+
+  $('#importData').addEventListener('click', () => importFile.click());
+
+  importFile.addEventListener('change', async () => {
+    const file = importFile.files?.[0];
+    importFile.value = '';
+    if (!file || !adapter) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      let result;
+      if (payload.schema === 'gremlin-a15-profile-bundle/v1') {
+        result = await adapter.importProfiles(payload, { applyToRuntime: true, replace: true });
+        flash(`imported ${result.imported} profiles`);
+      } else {
+        const imported = await adapter.importData(payload, { applyToRuntime: true, replace: true });
+        flash(`imported ${imported.profileResult.imported} profiles`);
+      }
+      refreshState();
+    } catch (error) {
+      flash(error?.message || 'import failed', true);
+    }
+  });
+
   runBtn.addEventListener('click', async () => {
     if (!adapter) {
       flash('adapter missing', true);
@@ -218,6 +281,10 @@
       if (mode === 'logs') refreshLogs();
     });
     adapter.on('logs-cleared', refreshLogs);
+    adapter.on('profiles-changed', refreshState);
+    adapter.on('profile-selected', refreshState);
+    adapter.on('profiles-imported', refreshState);
+    adapter.on('profiles-migration', refreshState);
     adapter.on('run-start', () => flash('running…'));
     adapter.on('run-complete', () => flash('complete'));
     adapter.on('run-error', d => flash(d.error || 'run failed', true));
