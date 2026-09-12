@@ -1,0 +1,1 @@
+GFI 0.3.4 handoff behavior: save the full capture as a file, then copy only the saved filename to the clipboard for easier lookup on iPad. File remains the canonical transport artifact.
