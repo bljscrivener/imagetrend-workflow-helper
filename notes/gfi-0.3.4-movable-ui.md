@@ -1,0 +1,1 @@
+UI safety invariant for GFI 0.3.4+: inspector panel must be movable by the user and must not be locked to a forced anchor position. The default position may be initialized, but drag/touch repositioning must be supported and persisted per device/session where practical.
