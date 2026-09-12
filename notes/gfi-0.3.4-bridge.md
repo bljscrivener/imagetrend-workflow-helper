@@ -1,0 +1,1 @@
+Bridge requirement: exports remain files. After the file save is triggered, GFI copies only the exact filename to the clipboard so the user can search for that file in Files/Downloads without pasting the full capture into chat.
